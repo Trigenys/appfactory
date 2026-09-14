@@ -9,6 +9,8 @@ export interface Env {
   GITHUB_OWNER?: string;
   GITHUB_TEMPLATE_OWNER?: string;
   GITHUB_TEMPLATE_REPO?: string;
+  GITHUB_COMMIT_AUTHOR_NAME?: string;
+  GITHUB_COMMIT_AUTHOR_EMAIL?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
