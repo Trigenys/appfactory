@@ -41,6 +41,7 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   OPENPAGE_GENERATOR_URL?: string;
+  OPENPAGE_EXPORT_URL?: string;
   OPENPAGE_API_TOKEN?: string;
   ENVIRONMENT?: string;
 }

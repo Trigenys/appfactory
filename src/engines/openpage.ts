@@ -2,6 +2,7 @@ import type { CreateProjectRequest, Env } from "../types";
 
 const OPENPAGE_UPSTREAM = "buildingopen/openpage";
 const DEFAULT_TIMEOUT_MS = 35_000;
+const EXPORT_TIMEOUT_MS = 20_000;
 
 const VALID_BLOCK_TYPES = new Set([
   "navbar",
@@ -79,18 +80,36 @@ export interface OpenPageGenerationResult {
   };
 }
 
-function endpointFromEnv(env: Env): string {
-  const configured = env.OPENPAGE_GENERATOR_URL?.trim();
-  if (!configured) {
+function normalizeEndpoint(value: string, fallbackPath: string): string {
+  const configured = value.trim().replace(/\/+$/, "");
+  if (!configured) throw new Error("OpenPage endpoint is empty.");
+
+  try {
+    const url = new URL(configured);
+    const path = url.pathname.replace(/\/+$/, "");
+    if (path && path !== "/") return configured;
+    return `${configured}${fallbackPath}`;
+  } catch {
+    throw new Error(`Invalid OpenPage endpoint URL: ${configured}`);
+  }
+}
+
+function generatorEndpointFromEnv(env: Env): string {
+  if (!env.OPENPAGE_GENERATOR_URL?.trim()) {
     throw new Error(
-      "OpenPage engine is not configured. Set OPENPAGE_GENERATOR_URL to a self-hosted OpenPage instance."
+      "OpenPage engine is not configured. Set OPENPAGE_GENERATOR_URL to the Trigenys OpenPage engine URL."
     );
   }
+  return normalizeEndpoint(env.OPENPAGE_GENERATOR_URL, "/api/appfactory-generate");
+}
 
-  const withoutTrailingSlash = configured.replace(/\/+$/, "");
-  return withoutTrailingSlash.endsWith("/api/generate")
-    ? withoutTrailingSlash
-    : `${withoutTrailingSlash}/api/generate`;
+function exportEndpointFromEnv(env: Env): string {
+  if (!env.OPENPAGE_EXPORT_URL?.trim()) {
+    throw new Error(
+      "OpenPage export is not configured. Set OPENPAGE_EXPORT_URL to the Trigenys OpenPage export endpoint."
+    );
+  }
+  return normalizeEndpoint(env.OPENPAGE_EXPORT_URL, "/api/appfactory-export");
 }
 
 function buildPrompt(input: CreateProjectRequest & { slug: string }): string {
@@ -113,10 +132,23 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function containsUnsafeUrl(value: unknown): boolean {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized.startsWith("javascript:") || normalized.startsWith("data:text/html");
+  }
+  if (Array.isArray(value)) return value.some(containsUnsafeUrl);
+  if (isObject(value)) return Object.values(value).some(containsUnsafeUrl);
+  return false;
+}
+
 function sanitizeBlock(raw: unknown, index: number): OpenPageBlockConfig | null {
   if (!isObject(raw)) return null;
   const type = typeof raw.type === "string" ? raw.type : "";
   if (!VALID_BLOCK_TYPES.has(type)) return null;
+
+  const props = isObject(raw.props) ? raw.props : {};
+  if (containsUnsafeUrl(props)) return null;
 
   return {
     id:
@@ -128,7 +160,7 @@ function sanitizeBlock(raw: unknown, index: number): OpenPageBlockConfig | null 
       typeof raw.variant === "string" && raw.variant.trim()
         ? raw.variant.trim()
         : "default",
-    props: isObject(raw.props) ? raw.props : {}
+    props
   };
 }
 
@@ -255,27 +287,36 @@ function validateAndSanitizeSiteConfig(
   return { config, removed: [...new Set(removed)] };
 }
 
+function authenticatedHeaders(env: Env): Headers {
+  if (!env.OPENPAGE_API_TOKEN?.trim()) {
+    throw new Error("OpenPage engine requires the OPENPAGE_API_TOKEN Worker secret.");
+  }
+  return new Headers({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${env.OPENPAGE_API_TOKEN}`
+  });
+}
+
 export function openPageConfigured(env: Env): boolean {
-  return Boolean(env.OPENPAGE_GENERATOR_URL?.trim());
+  return Boolean(
+    env.OPENPAGE_GENERATOR_URL?.trim() &&
+      env.OPENPAGE_EXPORT_URL?.trim() &&
+      env.OPENPAGE_API_TOKEN?.trim()
+  );
 }
 
 export async function generateWithOpenPage(
   env: Env,
   input: CreateProjectRequest & { slug: string }
 ): Promise<OpenPageGenerationResult> {
-  const endpoint = endpointFromEnv(env);
+  const endpoint = generatorEndpointFromEnv(env);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-
-  const headers = new Headers({ "Content-Type": "application/json" });
-  if (env.OPENPAGE_API_TOKEN) {
-    headers.set("Authorization", `Bearer ${env.OPENPAGE_API_TOKEN}`);
-  }
 
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers,
+      headers: authenticatedHeaders(env),
       signal: controller.signal,
       body: JSON.stringify({ prompt: buildPrompt(input) })
     });
@@ -302,6 +343,54 @@ export async function generateWithOpenPage(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`OpenPage generation timed out after ${DEFAULT_TIMEOUT_MS / 1000} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function exportWithOpenPage(
+  env: Env,
+  input: CreateProjectRequest & { slug: string },
+  config: OpenPageSiteConfig
+): Promise<string> {
+  const endpoint = exportEndpointFromEnv(env);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXPORT_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: authenticatedHeaders(env),
+      signal: controller.signal,
+      body: JSON.stringify({
+        config,
+        settings: {
+          siteName: input.name,
+          siteDescription: input.description || input.brief || undefined,
+          language: input.language || "en",
+          seoTitle: input.name,
+          seoDescription: input.brief || input.description || undefined
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(
+        `OpenPage export failed with HTTP ${response.status}${detail ? `: ${detail.slice(0, 500)}` : ""}.`
+      );
+    }
+
+    const html = await response.text();
+    if (!/<html[\s>]/i.test(html) || !/<body[\s>]/i.test(html)) {
+      throw new Error("OpenPage export returned an invalid HTML document.");
+    }
+    return html;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`OpenPage export timed out after ${EXPORT_TIMEOUT_MS / 1000} seconds.`);
     }
     throw error;
   } finally {

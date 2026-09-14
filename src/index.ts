@@ -1,7 +1,12 @@
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
-import { generateWithOpenPage, openPageConfigured } from "./engines/openpage";
+import {
+  exportWithOpenPage,
+  generateWithOpenPage,
+  openPageConfigured
+} from "./engines/openpage";
 import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
 import { buildLandingManifest } from "./manifest";
+import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
 import type { Env } from "./types";
 import { validateCreateProject } from "./validation";
 
@@ -32,6 +37,8 @@ function runtimeConfig(env: Env) {
       native: { configured: true },
       openpage: {
         configured: openPageConfigured(env),
+        generatorUrl: Boolean(env.OPENPAGE_GENERATOR_URL),
+        exportUrl: Boolean(env.OPENPAGE_EXPORT_URL),
         apiToken: Boolean(env.OPENPAGE_API_TOKEN)
       }
     }
@@ -89,55 +96,103 @@ async function readProjectInput(request: Request): Promise<ProjectInputResult> {
   }
 }
 
+async function provisionDeployment(env: Env, repository: Parameters<typeof ensurePagesProject>[1]) {
+  const pagesProject = await ensurePagesProject(env, repository);
+  const productionBranch = repository.default_branch || pagesProject.production_branch || "main";
+  const deployment = await triggerPagesDeployment(env, pagesProject, productionBranch);
+
+  return {
+    provider: "cloudflare-pages" as const,
+    project: pagesProject.name,
+    siteUrl: pagesProjectUrl(pagesProject),
+    productionBranch,
+    deploymentId: deployment.id,
+    deploymentUrl: deployment.url || null,
+    stage: deployment.latest_stage?.name || "queued",
+    state: deployment.latest_stage?.status || "active",
+    skipped: Boolean(deployment.is_skipped)
+  };
+}
+
+async function createNativeProject(
+  env: Env,
+  token: string,
+  input: ValidatedProjectInput
+): Promise<Response> {
+  const repository = await createRepositoryFromTemplate(token, env, input);
+  const manifest = buildLandingManifest(input);
+  const manifestCommitSha = await replaceManifest(token, env, repository, manifest);
+  const deployment = await provisionDeployment(env, repository);
+
+  return json(
+    {
+      status: "PROVISIONED",
+      generationEngine: "native",
+      repository: repository.full_name,
+      repositoryUrl: repository.html_url,
+      defaultBranch: repository.default_branch,
+      manifestCommitSha,
+      manifestVersion: 2,
+      deployment
+    },
+    201
+  );
+}
+
+async function createOpenPageProject(
+  env: Env,
+  token: string,
+  input: ValidatedProjectInput
+): Promise<Response> {
+  if (!openPageConfigured(env)) {
+    throw new Error(
+      "OpenPage is not fully configured. Set OPENPAGE_GENERATOR_URL, OPENPAGE_EXPORT_URL and the OPENPAGE_API_TOKEN Worker secret."
+    );
+  }
+
+  const generation = await generateWithOpenPage(env, { ...input, engine: "openpage" });
+  const html = await exportWithOpenPage(env, input, generation.config);
+  const { repository, created } = await createOpenPageRepository(token, env, input);
+  const siteCommitSha = await commitOpenPageSite(
+    token,
+    env,
+    repository,
+    created,
+    input,
+    generation.config,
+    html
+  );
+  const deployment = await provisionDeployment(env, repository);
+
+  return json(
+    {
+      status: "PROVISIONED",
+      generationEngine: "openpage",
+      engineRepository: "Trigenys/appfactory-openpage-engine",
+      repository: repository.full_name,
+      repositoryUrl: repository.html_url,
+      defaultBranch: repository.default_branch,
+      siteCommitSha,
+      openPageConfigVersion: 1,
+      quality: generation.quality,
+      deployment
+    },
+    201
+  );
+}
+
 async function createProject(request: Request, env: Env): Promise<Response> {
   const parsed = await readProjectInput(request);
   if ("response" in parsed) return parsed.response;
   const { input } = parsed;
 
-  if (input.engine === "openpage") {
-    return json(
-      {
-        error: "OPENPAGE_POC_ONLY",
-        message:
-          "OpenPage generation is connected as a POC, but repository rendering/export is not wired yet. Use POST /engines/openpage/generate to validate the engine output."
-      },
-      501
-    );
-  }
-
   try {
     assertRuntimeConfig(env);
     const token = await getInstallationToken(env);
-    const repository = await createRepositoryFromTemplate(token, env, input);
-    const manifest = buildLandingManifest(input);
-    const manifestCommitSha = await replaceManifest(token, env, repository, manifest);
-    const pagesProject = await ensurePagesProject(env, repository);
-    const productionBranch = repository.default_branch || pagesProject.production_branch || "main";
-    const deployment = await triggerPagesDeployment(env, pagesProject, productionBranch);
 
-    return json(
-      {
-        status: "PROVISIONED",
-        generationEngine: "native",
-        repository: repository.full_name,
-        repositoryUrl: repository.html_url,
-        defaultBranch: repository.default_branch,
-        manifestCommitSha,
-        manifestVersion: 2,
-        deployment: {
-          provider: "cloudflare-pages",
-          project: pagesProject.name,
-          siteUrl: pagesProjectUrl(pagesProject),
-          productionBranch,
-          deploymentId: deployment.id,
-          deploymentUrl: deployment.url || null,
-          stage: deployment.latest_stage?.name || "queued",
-          state: deployment.latest_stage?.status || "active",
-          skipped: Boolean(deployment.is_skipped)
-        }
-      },
-      201
-    );
+    return input.engine === "openpage"
+      ? await createOpenPageProject(env, token, input)
+      : await createNativeProject(env, token, input);
   } catch (error) {
     console.error("Project creation failed", error);
     const message =
@@ -187,7 +242,7 @@ export default {
       return json({
         status: runtimeReady(env) ? "ok" : "degraded",
         service: "appfactory-api",
-        milestone: "M3-openpage-engine-poc",
+        milestone: "M3-openpage-end-to-end",
         manifestVersion: 2,
         runtimeConfig: config
       });
