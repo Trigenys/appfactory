@@ -2,35 +2,36 @@
 
 Automated software delivery platform for generating, validating and deploying applications.
 
-## Current milestone — M3 Brief Specification
+## Current milestone — M3 OpenPage Engine POC
 
-M3 starts the generation engine. AppFactory can now accept a short business brief and turn it into a deterministic landing-page specification before provisioning the repository and deployment.
+AppFactory has validated its native brief-to-manifest pipeline and modular landing renderer. M3 now introduces a pluggable generation-engine boundary so open-source website generators can be connected without turning the Worker itself into a giant design engine.
+
+Current architecture:
 
 ```text
-POST /projects
-  -> validate the brief-first request
-  -> infer industry, tone and conversion goal
-  -> choose a design recipe, motion level and section plan
-  -> emit AppFactory Manifest v2
-  -> authenticate as AppFactory Bot (GitHub App)
-  -> create or resume a repository from Trigenys/appfactory-landing-template
-  -> replace appfactory.json with the generated specification
-  -> provision/reuse a Cloudflare Pages project linked to GitHub
-  -> trigger the first production deployment
-  -> future pushes to main deploy automatically
+brief
+  -> AppFactory orchestration
+  -> generation engine
+       -> native AppFactory planner (production path)
+       -> OpenPage adapter (POC path)
+  -> quality gate
+  -> repository generation
+  -> Cloudflare Pages deployment
 ```
 
-The M3.1 decision engine is deliberately deterministic. A model-based planner can be introduced later without making the React renderer itself probabilistic.
+The first external engine POC targets `buildingopen/openpage`, an MIT-licensed JSON-first website builder. OpenPage generates a structured site config from a prompt; AppFactory remains responsible for orchestration, quality rules, GitHub lifecycle and deployment.
 
 ## API
 
 ### `GET /health`
 
-Returns Worker readiness plus the active milestone and manifest version without exposing secret values.
+Returns Worker readiness plus the active milestone, manifest version and engine configuration flags without exposing secret values.
 
 ### `POST /projects`
 
-Preferred M3 request:
+Production project provisioning currently uses the native AppFactory renderer.
+
+Preferred request:
 
 ```json
 {
@@ -51,37 +52,36 @@ tone      -> premium
 goal      -> bookings
 recipe    -> luxury
 animation -> subtle
-sections  -> hero, trust, services, process, testimonials, faq, contact, final-cta
+sections  -> hero, trust, services, process, faq, contact, final-cta
 ```
 
-Legacy explicit fields (`recipe`, `animation`, `heroTitle`, `heroSubtitle`, `primaryCtaLabel`, `primaryCtaHref`) remain supported and override inferred choices when supplied.
+Successful response includes the repository, Manifest v2 commit and Cloudflare Pages deployment details.
 
-Successful response includes the repository, Manifest v2 commit and Cloudflare Pages deployment details:
+The optional request field `engine` accepts `native` or `openpage`. `native` is the default. `engine: "openpage"` is deliberately blocked on `/projects` until OpenPage rendering/export is wired end-to-end, so AppFactory never silently deploys the native template while claiming an external engine was used.
+
+### `POST /engines/openpage/generate`
+
+POC endpoint for validating OpenPage generation independently from repository provisioning.
+
+It accepts the same brief-first request as `/projects`, calls the configured OpenPage generator and returns a sanitized OpenPage `SiteConfig`.
+
+AppFactory removes evidence-sensitive block types when the brief does not contain supporting data, including fabricated testimonials, logo clouds, statistics and pricing. It also requires a hero and a CTA/contact block.
+
+Example:
 
 ```json
 {
-  "status": "PROVISIONED",
-  "repository": "Trigenys/nova-legal",
-  "repositoryUrl": "https://github.com/Trigenys/nova-legal",
-  "defaultBranch": "main",
-  "manifestCommitSha": "...",
-  "manifestVersion": 2,
-  "deployment": {
-    "provider": "cloudflare-pages",
-    "project": "nova-legal",
-    "siteUrl": "https://nova-legal.pages.dev",
-    "productionBranch": "main",
-    "deploymentId": "...",
-    "stage": "queued",
-    "state": "idle",
-    "skipped": false
-  }
+  "name": "Nova Legal",
+  "slug": "nova-legal-openpage-poc",
+  "brief": "Cabinet d'avocats premium spécialisé dans les startups technologiques en Afrique. L'objectif principal est la prise de rendez-vous.",
+  "language": "fr",
+  "audience": "Fondateurs et dirigeants de startups technologiques"
 }
 ```
 
 ## Manifest v2
 
-Manifest v2 adds structured generation intent while temporarily preserving the v1 rendering fields as a compatibility bridge:
+The native engine emits structured generation intent:
 
 - `strategy`: brief, audience, industry, tone and conversion goal
 - `brand`: tone, palette and typography direction
@@ -89,9 +89,9 @@ Manifest v2 adds structured generation intent while temporarily preserving the v
 - `sections`: ordered section plan
 - `seo`: generated title and description
 - `motion`: motion policy and reduced-motion requirement
-- `content`: generated hero, feature and final CTA content
+- `content`: generated business-facing section content
 
-M3.4 will make the frontend renderer consume `content` and `sections` directly and remove the compatibility duplication.
+The native modular renderer consumes this contract directly.
 
 ## Runtime
 
@@ -112,6 +112,8 @@ Optional variables:
 - `GITHUB_TEMPLATE_REPO` (defaults to `appfactory-landing-template`)
 - `GITHUB_COMMIT_AUTHOR_NAME`
 - `GITHUB_COMMIT_AUTHOR_EMAIL`
+- `OPENPAGE_GENERATOR_URL` — self-hosted OpenPage base URL or full `/api/generate` URL
+- `OPENPAGE_API_TOKEN` — optional bearer token for a protected Trigenys OpenPage deployment
 - `ENVIRONMENT`
 
 GitHub downloads App private keys as PEM files. AppFactory accepts both the native GitHub RSA PEM format (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) directly, so no manual key conversion is required. The legacy `GITHUB_PRIVATE_KEY_PKCS8` secret name remains supported as a fallback.
@@ -124,7 +126,7 @@ Generated commits use the human project owner as the Git author and the AppFacto
 
 The Cloudflare Workers & Pages GitHub App must be installed on the `Trigenys` organization with access to repositories generated by AppFactory. For end-to-end unattended generation, granting that Cloudflare App access to all current and future repositories in the organization avoids a manual authorization step for every generated site.
 
-Each Pages project is created with:
+Each native Pages project is created with:
 
 - Git provider: GitHub
 - production branch: `main`
@@ -145,4 +147,10 @@ Store local secrets in `.dev.vars`; never commit that file.
 
 ## Architecture boundary
 
-`appfactory` owns orchestration, specification generation, repository generation and hosting provisioning. `appfactory-landing-template` owns the generated frontend contract. `appfactory-project-automation` remains a separate reusable GitHub Project/Issue/PR automation brick.
+`appfactory` owns orchestration, engine selection, quality gates, repository generation and hosting provisioning.
+
+`appfactory-landing-template` is the native fallback renderer, not the only long-term generation engine.
+
+External generation engines such as OpenPage plug into AppFactory behind adapters. Their own renderer/export path should remain authoritative wherever possible instead of being reimplemented inside the Worker.
+
+See `docs/openpage-engine-poc.md` for the OpenPage audit and the remaining end-to-end integration step.

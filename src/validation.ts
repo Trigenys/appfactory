@@ -3,12 +3,14 @@ import type {
   ConversionGoal,
   CreateProjectRequest,
   DesignRecipe,
+  GenerationEngine,
   ProjectLanguage
 } from "./types";
 
 const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
+const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -55,6 +57,11 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     throw new Error("language must be one of: fr, en.");
   }
 
+  const engine = body.engine ?? "native";
+  if (typeof engine !== "string" || !ENGINES.has(engine as GenerationEngine)) {
+    throw new Error("engine must be one of: native, openpage.");
+  }
+
   const recipe = body.recipe;
   if (recipe !== undefined && (typeof recipe !== "string" || !RECIPES.has(recipe as DesignRecipe))) {
     throw new Error("recipe must be one of: corporate, luxury, saas.");
@@ -82,6 +89,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     language: language as ProjectLanguage,
     audience: optionalTrimmedString(body, "audience", 300),
     goal: goal as ConversionGoal | undefined,
+    engine: engine as GenerationEngine,
     recipe: recipe as DesignRecipe | undefined,
     animation: animation as AnimationLevel | undefined,
     heroTitle: optionalTrimmedString(body, "heroTitle", 160),

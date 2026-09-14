@@ -1,6 +1,7 @@
 export type DesignRecipe = "corporate" | "luxury" | "saas";
 export type AnimationLevel = "none" | "subtle" | "expressive";
 export type ProjectLanguage = "fr" | "en";
+export type GenerationEngine = "native" | "openpage";
 export type Industry =
   | "legal"
   | "technology"
@@ -39,6 +40,8 @@ export interface Env {
   GITHUB_COMMIT_AUTHOR_EMAIL?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  OPENPAGE_GENERATOR_URL?: string;
+  OPENPAGE_API_TOKEN?: string;
   ENVIRONMENT?: string;
 }
 
@@ -51,6 +54,7 @@ export interface CreateProjectRequest {
   language?: ProjectLanguage;
   audience?: string;
   goal?: ConversionGoal;
+  engine?: GenerationEngine;
   recipe?: DesignRecipe;
   animation?: AnimationLevel;
   heroTitle?: string;
