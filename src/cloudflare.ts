@@ -1,5 +1,6 @@
 import type {
   CloudflareApiResponse,
+  CloudflarePagesDeployment,
   CloudflarePagesProject,
   Env,
   GitHubRepository
@@ -36,13 +37,15 @@ async function cloudflareRequest<T>(
 ): Promise<T> {
   assertCloudflareConfig(env);
 
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${env.CLOUDFLARE_API_TOKEN}`);
+  if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(`${CLOUDFLARE_API}${path}`, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-      "Content-Type": "application/json",
-      ...(init.headers || {})
-    }
+    headers
   });
 
   const payload = (await response.json()) as CloudflareApiResponse<T>;
@@ -148,6 +151,23 @@ export async function ensurePagesProject(
     }
     throw error;
   }
+}
+
+export async function triggerPagesDeployment(
+  env: Env,
+  project: CloudflarePagesProject,
+  branch: string
+): Promise<CloudflarePagesDeployment> {
+  assertCloudflareConfig(env);
+
+  const deploymentPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(project.name)}/deployments`;
+  const form = new FormData();
+  form.set("branch", branch);
+
+  return cloudflareRequest<CloudflarePagesDeployment>(env, deploymentPath, {
+    method: "POST",
+    body: form
+  });
 }
 
 export function pagesProjectUrl(project: CloudflarePagesProject): string | null {
