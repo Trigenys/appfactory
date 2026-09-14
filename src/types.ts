@@ -30,6 +30,10 @@ export interface GitHubRepository {
   full_name: string;
   html_url: string;
   default_branch: string;
+  size?: number;
+  template_repository?: {
+    full_name: string;
+  } | null;
 }
 
 export interface GitHubContentFile {

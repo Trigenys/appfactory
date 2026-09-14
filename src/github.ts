@@ -9,6 +9,16 @@ import type {
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 
+class GitHubApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly path: string,
+    readonly detail: string
+  ) {
+    super(`GitHub API ${status} on ${path}: ${detail}`);
+  }
+}
+
 function base64Url(value: Uint8Array | string): string {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
   let binary = "";
@@ -156,10 +166,163 @@ async function githubRequest<T>(
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`GitHub API ${response.status} on ${path}: ${detail}`);
+    throw new GitHubApiError(response.status, path, detail);
   }
 
   return (await response.json()) as T;
+}
+
+function templateCoordinates(env: Env): {
+  owner: string;
+  templateOwner: string;
+  templateRepo: string;
+} {
+  const owner = env.GITHUB_OWNER || "Trigenys";
+  return {
+    owner,
+    templateOwner: env.GITHUB_TEMPLATE_OWNER || owner,
+    templateRepo: env.GITHUB_TEMPLATE_REPO || "appfactory-landing-template"
+  };
+}
+
+async function getExistingGeneratedRepository(
+  token: string,
+  owner: string,
+  slug: string,
+  templateOwner: string,
+  templateRepo: string
+): Promise<GitHubRepository> {
+  const existing = await githubRequest<GitHubRepository>(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(slug)}`
+  );
+  const expectedTemplate = `${templateOwner}/${templateRepo}`.toLowerCase();
+  const actualTemplate = existing.template_repository?.full_name?.toLowerCase();
+
+  if (actualTemplate !== expectedTemplate) {
+    throw new Error(
+      `Repository ${existing.full_name} already exists and was not created from ${templateOwner}/${templateRepo}. Choose another slug.`
+    );
+  }
+
+  return existing;
+}
+
+async function hasManifest(token: string, repository: GitHubRepository): Promise<boolean> {
+  const [owner, repo] = repository.full_name.split("/");
+  try {
+    await githubRequest<GitHubContentFile>(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/appfactory.json`
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) return false;
+    throw error;
+  }
+}
+
+async function materializeTemplate(
+  token: string,
+  env: Env,
+  repository: GitHubRepository
+): Promise<void> {
+  const { templateOwner, templateRepo } = templateCoordinates(env);
+  const [targetOwner, targetRepo] = repository.full_name.split("/");
+
+  const template = await githubRequest<GitHubRepository>(
+    token,
+    `/repos/${encodeURIComponent(templateOwner)}/${encodeURIComponent(templateRepo)}`
+  );
+  const tree = await githubRequest<{
+    truncated: boolean;
+    tree: Array<{ path: string; mode: string; type: string; sha: string }>;
+  }>(
+    token,
+    `/repos/${encodeURIComponent(templateOwner)}/${encodeURIComponent(templateRepo)}/git/trees/${encodeURIComponent(template.default_branch)}?recursive=1`
+  );
+
+  if (tree.truncated) {
+    throw new Error("Template tree is too large to materialize safely in one request.");
+  }
+
+  const blobs = tree.tree.filter((entry) => entry.type === "blob");
+  const copiedEntries = await Promise.all(
+    blobs.map(async (entry) => {
+      const source = await githubRequest<{ content: string; encoding: string }>(
+        token,
+        `/repos/${encodeURIComponent(templateOwner)}/${encodeURIComponent(templateRepo)}/git/blobs/${entry.sha}`
+      );
+      if (source.encoding !== "base64") {
+        throw new Error(`Unsupported blob encoding for ${entry.path}: ${source.encoding}`);
+      }
+
+      const copied = await githubRequest<{ sha: string }>(
+        token,
+        `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: source.content.replace(/\s+/g, ""),
+            encoding: "base64"
+          })
+        }
+      );
+
+      return {
+        path: entry.path,
+        mode: entry.mode,
+        type: "blob",
+        sha: copied.sha
+      };
+    })
+  );
+
+  const targetTree = await githubRequest<{ sha: string }>(
+    token,
+    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/trees`,
+    {
+      method: "POST",
+      body: JSON.stringify({ tree: copiedEntries })
+    }
+  );
+  const commit = await githubRequest<{ sha: string }>(
+    token,
+    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/commits`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        message: "chore(appfactory): materialize landing template",
+        tree: targetTree.sha,
+        parents: []
+      })
+    }
+  );
+
+  await githubRequest<unknown>(
+    token,
+    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/refs`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ref: `refs/heads/${repository.default_branch || "main"}`,
+        sha: commit.sha
+      })
+    }
+  );
+}
+
+async function ensureTemplateMaterialized(
+  token: string,
+  env: Env,
+  repository: GitHubRepository
+): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (await hasManifest(token, repository)) return;
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+
+  await materializeTemplate(token, env, repository);
 }
 
 export async function getInstallationToken(env: Env): Promise<string> {
@@ -177,24 +340,37 @@ export async function createRepositoryFromTemplate(
   env: Env,
   input: CreateProjectRequest & { slug: string }
 ): Promise<GitHubRepository> {
-  const owner = env.GITHUB_OWNER || "Trigenys";
-  const templateOwner = env.GITHUB_TEMPLATE_OWNER || owner;
-  const templateRepo = env.GITHUB_TEMPLATE_REPO || "appfactory-landing-template";
+  const { owner, templateOwner, templateRepo } = templateCoordinates(env);
+  let repository: GitHubRepository;
 
-  return githubRequest<GitHubRepository>(
-    token,
-    `/repos/${encodeURIComponent(templateOwner)}/${encodeURIComponent(templateRepo)}/generate`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        owner,
-        name: input.slug,
-        description: input.description || `Generated by AppFactory for ${input.name}`,
-        private: input.private ?? true,
-        include_all_branches: false
-      })
-    }
-  );
+  try {
+    repository = await githubRequest<GitHubRepository>(
+      token,
+      `/repos/${encodeURIComponent(templateOwner)}/${encodeURIComponent(templateRepo)}/generate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          owner,
+          name: input.slug,
+          description: input.description || `Generated by AppFactory for ${input.name}`,
+          private: input.private ?? true,
+          include_all_branches: false
+        })
+      }
+    );
+  } catch (error) {
+    if (!(error instanceof GitHubApiError) || error.status !== 422) throw error;
+    repository = await getExistingGeneratedRepository(
+      token,
+      owner,
+      input.slug,
+      templateOwner,
+      templateRepo
+    );
+  }
+
+  await ensureTemplateMaterialized(token, env, repository);
+  return repository;
 }
 
 export async function replaceManifest(
