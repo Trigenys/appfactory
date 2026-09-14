@@ -62,7 +62,7 @@ Required Worker secrets:
 
 - `GITHUB_APP_ID`
 - `GITHUB_INSTALLATION_ID`
-- `GITHUB_PRIVATE_KEY_PKCS8`
+- `GITHUB_PRIVATE_KEY`
 
 Optional variables:
 
@@ -71,7 +71,7 @@ Optional variables:
 - `GITHUB_TEMPLATE_REPO` (defaults to `appfactory-landing-template`)
 - `ENVIRONMENT`
 
-GitHub downloads App private keys as PEM files. AppFactory expects the key stored in the Worker secret to be PKCS#8 (`-----BEGIN PRIVATE KEY-----`). Convert it once before storing it if necessary.
+GitHub downloads App private keys as PEM files. AppFactory accepts both the native GitHub RSA PEM format (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) directly, so no manual key conversion is required. The legacy `GITHUB_PRIVATE_KEY_PKCS8` secret name remains supported as a fallback.
 
 ## Local development
 

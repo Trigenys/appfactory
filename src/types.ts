@@ -4,7 +4,8 @@ export type AnimationLevel = "none" | "subtle" | "expressive";
 export interface Env {
   GITHUB_APP_ID: string;
   GITHUB_INSTALLATION_ID: string;
-  GITHUB_PRIVATE_KEY_PKCS8: string;
+  GITHUB_PRIVATE_KEY?: string;
+  GITHUB_PRIVATE_KEY_PKCS8?: string;
   GITHUB_OWNER?: string;
   GITHUB_TEMPLATE_OWNER?: string;
   GITHUB_TEMPLATE_REPO?: string;
