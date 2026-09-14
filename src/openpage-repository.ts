@@ -77,6 +77,13 @@ function encodeBase64Utf8(value: string): string {
   return btoa(binary);
 }
 
+function encodeContentPath(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
 async function readEngineMarker(token: string, repository: GitHubRepository): Promise<string | null> {
   const [owner, repo] = repository.full_name.split("/");
   try {
@@ -235,25 +242,56 @@ function generatedFiles(
   };
 }
 
-async function createBlobs(
+async function readContentSha(
   token: string,
   repository: GitHubRepository,
-  files: Record<string, string>
-): Promise<Array<{ path: string; mode: string; type: "blob"; sha: string }>> {
+  branch: string,
+  path: string
+): Promise<string | null> {
   const [owner, repo] = repository.full_name.split("/");
-  return Promise.all(
-    Object.entries(files).map(async ([path, content]) => {
-      const blob = await githubRequest<{ sha: string }>(
-        token,
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs`,
-        {
-          method: "POST",
-          body: JSON.stringify({ content, encoding: "utf-8" })
-        }
-      );
-      return { path, mode: "100644", type: "blob" as const, sha: blob.sha };
-    })
+  const encodedPath = encodeContentPath(path);
+
+  try {
+    const file = await githubRequest<{ sha: string }>(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`
+    );
+    return file.sha;
+  } catch (error) {
+    if (error instanceof GitHubApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+async function upsertGeneratedFile(
+  token: string,
+  env: Env,
+  repository: GitHubRepository,
+  branch: string,
+  path: string,
+  content: string,
+  message: string
+): Promise<string> {
+  const [owner, repo] = repository.full_name.split("/");
+  const encodedPath = encodeContentPath(path);
+  const sha = await readContentSha(token, repository, branch, path);
+
+  const result = await githubRequest<{ commit: { sha: string } }>(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        message,
+        content: encodeBase64Utf8(content),
+        branch,
+        author: commitAuthor(env),
+        ...(sha ? { sha } : {})
+      })
+    }
   );
+
+  return result.commit.sha;
 }
 
 export async function commitOpenPageSite(
@@ -265,7 +303,6 @@ export async function commitOpenPageSite(
   config: OpenPageSiteConfig,
   html: string
 ): Promise<string> {
-  const [owner, repo] = repository.full_name.split("/");
   const branch = repository.default_branch || "main";
   const head = await readRepositoryHead(token, repository);
   if (!head) {
@@ -273,44 +310,25 @@ export async function commitOpenPageSite(
   }
 
   const files = generatedFiles(input, config, html);
-  const entries = await createBlobs(token, repository, files);
+  let lastCommitSha = head.commitSha;
+  let fileIndex = 0;
 
-  const tree = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        base_tree: head.treeSha,
-        tree: entries
-      })
-    }
-  );
-
-  const commit = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/commits`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        message: created
+  for (const [path, content] of Object.entries(files)) {
+    fileIndex += 1;
+    lastCommitSha = await upsertGeneratedFile(
+      token,
+      env,
+      repository,
+      branch,
+      path,
+      content,
+      fileIndex === 1
+        ? created
           ? "feat(appfactory): generate OpenPage site"
-          : "chore(appfactory): regenerate OpenPage site",
-        tree: tree.sha,
-        parents: [head.commitSha],
-        author: commitAuthor(env)
-      })
-    }
-  );
+          : "chore(appfactory): regenerate OpenPage site"
+        : `chore(appfactory): sync generated file ${path}`
+    );
+  }
 
-  await githubRequest<unknown>(
-    token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(branch)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ sha: commit.sha, force: false })
-    }
-  );
-
-  return commit.sha;
+  return lastCommitSha;
 }
