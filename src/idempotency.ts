@@ -5,6 +5,7 @@ const GITHUB_API_VERSION = "2022-11-28";
 const STATE_PATH = "appfactory.state.json";
 const DEFAULT_COMMIT_AUTHOR_NAME = "EagleFox31";
 const DEFAULT_COMMIT_AUTHOR_EMAIL = "86088743+EagleFox31@users.noreply.github.com";
+const OPENPAGE_GENERATION_VERSION = 2;
 
 export interface ProjectIdempotencyState {
   schemaVersion: 1;
@@ -71,6 +72,7 @@ async function githubRequest<T>(token: string, path: string, init: RequestInit =
 function canonicalProjectRequest(input: CreateProjectRequest & { slug: string }): Record<string, unknown> {
   return {
     schemaVersion: 1,
+    generationVersion: input.engine === "openpage" ? OPENPAGE_GENERATION_VERSION : 1,
     name: input.name,
     slug: input.slug,
     description: input.description ?? null,
