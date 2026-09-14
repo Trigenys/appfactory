@@ -10,6 +10,27 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function runtimeConfig(env: Env) {
+  return {
+    appId: Boolean(env.GITHUB_APP_ID),
+    installationId: Boolean(env.GITHUB_INSTALLATION_ID),
+    privateKey: Boolean(env.GITHUB_PRIVATE_KEY || env.GITHUB_PRIVATE_KEY_PKCS8)
+  };
+}
+
+function assertRuntimeConfig(env: Env): void {
+  const config = runtimeConfig(env);
+  const missing: string[] = [];
+
+  if (!config.appId) missing.push("GITHUB_APP_ID");
+  if (!config.installationId) missing.push("GITHUB_INSTALLATION_ID");
+  if (!config.privateKey) missing.push("GITHUB_PRIVATE_KEY");
+
+  if (missing.length > 0) {
+    throw new Error(`Missing Worker runtime configuration: ${missing.join(", ")}.`);
+  }
+}
+
 async function createProject(request: Request, env: Env): Promise<Response> {
   let payload: unknown;
   try {
@@ -32,6 +53,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   }
 
   try {
+    assertRuntimeConfig(env);
     const token = await getInstallationToken(env);
     const repository = await createRepositoryFromTemplate(token, env, input);
     const manifest = buildLandingManifest(input);
@@ -65,7 +87,13 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ status: "ok", service: "appfactory-api", milestone: "M1-repository-factory" });
+      const config = runtimeConfig(env);
+      return json({
+        status: config.appId && config.installationId && config.privateKey ? "ok" : "degraded",
+        service: "appfactory-api",
+        milestone: "M1-repository-factory",
+        runtimeConfig: config
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/projects") {
