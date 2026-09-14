@@ -30,6 +30,10 @@ function assertCloudflareConfig(env: Env): asserts env is Env & {
   }
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function cloudflareRequest<T>(
   env: Env,
   path: string,
@@ -100,6 +104,20 @@ function verifyProjectSource(
   return project;
 }
 
+async function getPagesProjectIfPresent(
+  env: Env,
+  projectPath: string,
+  repository: GitHubRepository
+): Promise<CloudflarePagesProject | null> {
+  try {
+    const existing = await cloudflareRequest<CloudflarePagesProject>(env, projectPath);
+    return verifyProjectSource(existing, repository);
+  } catch (error) {
+    if (error instanceof CloudflareApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 export async function ensurePagesProject(
   env: Env,
   repository: GitHubRepository
@@ -108,49 +126,63 @@ export async function ensurePagesProject(
   const source = expectedGitHubSource(repository);
   const projectName = repository.name;
   const projectPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(projectName)}`;
-
-  try {
-    const existing = await cloudflareRequest<CloudflarePagesProject>(env, projectPath);
-    return verifyProjectSource(existing, repository);
-  } catch (error) {
-    if (!(error instanceof CloudflareApiError) || error.status !== 404) throw error;
-  }
+  const existing = await getPagesProjectIfPresent(env, projectPath, repository);
+  if (existing) return existing;
 
   const collectionPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects`;
-  try {
-    return await cloudflareRequest<CloudflarePagesProject>(env, collectionPath, {
-      method: "POST",
-      body: JSON.stringify({
-        name: projectName,
+  const body = JSON.stringify({
+    name: projectName,
+    production_branch: repository.default_branch || "main",
+    build_config: {
+      build_command: "npm run build",
+      destination_dir: "dist",
+      root_dir: "/"
+    },
+    source: {
+      type: "github",
+      config: {
+        owner: source.owner,
+        owner_id: source.ownerId,
+        repo_id: source.repoId,
+        repo_name: source.repoName,
         production_branch: repository.default_branch || "main",
-        build_config: {
-          build_command: "npm run build",
-          destination_dir: "dist",
-          root_dir: "/"
-        },
-        source: {
-          type: "github",
-          config: {
-            owner: source.owner,
-            owner_id: source.ownerId,
-            repo_id: source.repoId,
-            repo_name: source.repoName,
-            production_branch: repository.default_branch || "main",
-            production_deployments_enabled: true,
-            preview_deployment_setting: "all",
-            pr_comments_enabled: true
-          }
-        }
-      })
-    });
-  } catch (error) {
-    // A retry may race with an already-created Pages project. Resume safely.
-    if (error instanceof CloudflareApiError && (error.status === 409 || error.status === 400)) {
-      const existing = await cloudflareRequest<CloudflarePagesProject>(env, projectPath);
-      return verifyProjectSource(existing, repository);
+        production_deployments_enabled: true,
+        preview_deployment_setting: "all",
+        pr_comments_enabled: true
+      }
     }
-    throw error;
+  });
+
+  let lastError: unknown;
+
+  // A newly generated private repository can take a few seconds to become visible
+  // to Cloudflare's GitHub installation. Retry only transient server failures, and
+  // always check whether Cloudflare created the project before issuing another POST.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await cloudflareRequest<CloudflarePagesProject>(env, collectionPath, {
+        method: "POST",
+        body
+      });
+    } catch (error) {
+      lastError = error;
+      if (!(error instanceof CloudflareApiError)) throw error;
+
+      if (error.status === 400 || error.status === 409 || error.status >= 500) {
+        const created = await getPagesProjectIfPresent(env, projectPath, repository);
+        if (created) return created;
+      }
+
+      if (error.status >= 500 && attempt < 3) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+
+      throw error;
+    }
   }
+
+  throw lastError;
 }
 
 export async function triggerPagesDeployment(
