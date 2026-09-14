@@ -34,6 +34,27 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function parseCloudflareResponse<T>(
+  response: Response,
+  path: string
+): Promise<CloudflareApiResponse<T>> {
+  const text = await response.text();
+
+  if (!text.trim()) {
+    throw new CloudflareApiError(response.status, path, "Cloudflare returned an empty response body.");
+  }
+
+  try {
+    return JSON.parse(text) as CloudflareApiResponse<T>;
+  } catch {
+    throw new CloudflareApiError(
+      response.status,
+      path,
+      `Cloudflare returned malformed JSON: ${text.slice(0, 300)}`
+    );
+  }
+}
+
 async function cloudflareRequest<T>(
   env: Env,
   path: string,
@@ -52,7 +73,7 @@ async function cloudflareRequest<T>(
     headers
   });
 
-  const payload = (await response.json()) as CloudflareApiResponse<T>;
+  const payload = await parseCloudflareResponse<T>(response, path);
   if (!response.ok || !payload.success) {
     const detail =
       payload.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") ||
@@ -109,13 +130,37 @@ async function getPagesProjectIfPresent(
   projectPath: string,
   repository: GitHubRepository
 ): Promise<CloudflarePagesProject | null> {
-  try {
-    const existing = await cloudflareRequest<CloudflarePagesProject>(env, projectPath);
-    return verifyProjectSource(existing, repository);
-  } catch (error) {
-    if (error instanceof CloudflareApiError && error.status === 404) return null;
-    throw error;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const existing = await cloudflareRequest<CloudflarePagesProject>(env, projectPath);
+      return verifyProjectSource(existing, repository);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof CloudflareApiError && error.status === 404) return null;
+      if (
+        error instanceof CloudflareApiError &&
+        (error.detail.includes("empty response body") || error.detail.includes("malformed JSON")) &&
+        attempt === 0
+      ) {
+        await sleep(500);
+        continue;
+      }
+      throw error;
+    }
   }
+
+  throw lastError;
+}
+
+async function getLatestPagesDeployment(
+  env: Env,
+  project: CloudflarePagesProject
+): Promise<CloudflarePagesDeployment | null> {
+  const path = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID || "")}/pages/projects/${encodeURIComponent(project.name)}/deployments?per_page=1`;
+  const deployments = await cloudflareRequest<CloudflarePagesDeployment[]>(env, path);
+  return deployments[0] || null;
 }
 
 export async function ensurePagesProject(
@@ -168,12 +213,22 @@ export async function ensurePagesProject(
       lastError = error;
       if (!(error instanceof CloudflareApiError)) throw error;
 
-      if (error.status === 400 || error.status === 409 || error.status >= 500) {
+      const ambiguousSuccess =
+        error.status >= 200 &&
+        error.status < 300 &&
+        (error.detail.includes("empty response body") || error.detail.includes("malformed JSON"));
+
+      if (
+        ambiguousSuccess ||
+        error.status === 400 ||
+        error.status === 409 ||
+        error.status >= 500
+      ) {
         const created = await getPagesProjectIfPresent(env, projectPath, repository);
         if (created) return created;
       }
 
-      if (error.status >= 500 && attempt < 3) {
+      if ((ambiguousSuccess || error.status >= 500) && attempt < 3) {
         await sleep(1000 * (attempt + 1));
         continue;
       }
@@ -196,10 +251,27 @@ export async function triggerPagesDeployment(
   const form = new FormData();
   form.set("branch", branch);
 
-  return cloudflareRequest<CloudflarePagesDeployment>(env, deploymentPath, {
-    method: "POST",
-    body: form
-  });
+  try {
+    return await cloudflareRequest<CloudflarePagesDeployment>(env, deploymentPath, {
+      method: "POST",
+      body: form
+    });
+  } catch (error) {
+    if (!(error instanceof CloudflareApiError)) throw error;
+
+    const ambiguousSuccess =
+      error.status >= 200 &&
+      error.status < 300 &&
+      (error.detail.includes("empty response body") || error.detail.includes("malformed JSON"));
+
+    if (ambiguousSuccess || error.status >= 500) {
+      await sleep(750);
+      const latest = await getLatestPagesDeployment(env, project);
+      if (latest) return latest;
+    }
+
+    throw error;
+  }
 }
 
 export function pagesProjectUrl(project: CloudflarePagesProject): string | null {
