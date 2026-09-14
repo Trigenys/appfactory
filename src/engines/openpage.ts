@@ -119,6 +119,13 @@ function buildPrompt(input: CreateProjectRequest & { slug: string }): string {
     input.audience ? `Target audience: ${input.audience}` : undefined,
     `Language: ${input.language || "en"}.`,
     input.goal ? `Primary conversion goal: ${input.goal}.` : undefined,
+    input.recipe ? `Design recipe: ${input.recipe}.` : undefined,
+    input.animation ? `Animation level: ${input.animation}.` : undefined,
+    input.heroTitle ? `Hero title: ${input.heroTitle}` : undefined,
+    input.heroSubtitle ? `Hero subtitle: ${input.heroSubtitle}` : undefined,
+    input.primaryCtaLabel ? `Primary CTA label: ${input.primaryCtaLabel}` : undefined,
+    input.primaryCtaHref ? `Primary CTA href: ${input.primaryCtaHref}` : undefined,
+    "Treat explicit hero and CTA fields as hard requirements and preserve their wording exactly.",
     "Keep the copy specific to the business and avoid describing the website-generation process.",
     "Do not mention OpenPage, AppFactory, AI, templates, manifests, or generation tooling in client-facing copy.",
     "Do not invent testimonials, customer logos, performance statistics, awards, certifications, prices, team members, addresses, phone numbers, emails, or factual claims that were not supplied in the brief.",
@@ -213,6 +220,38 @@ function sanitizeBlocks(
   return blocks;
 }
 
+function applyExplicitInputOverrides(
+  config: OpenPageSiteConfig,
+  input: CreateProjectRequest & { slug: string }
+): OpenPageSiteConfig {
+  const applyToBlocks = (blocks: OpenPageBlockConfig[]): OpenPageBlockConfig[] =>
+    blocks.map((block) => {
+      const props = { ...block.props };
+
+      if (block.type === "hero") {
+        if (input.heroTitle?.trim()) props.headline = input.heroTitle.trim();
+        if (input.heroSubtitle?.trim()) props.subheadline = input.heroSubtitle.trim();
+        if (input.primaryCtaLabel?.trim()) props.primaryCta = input.primaryCtaLabel.trim();
+        if (input.primaryCtaHref?.trim()) props.primaryCtaUrl = input.primaryCtaHref.trim();
+      }
+
+      if (block.type === "navbar" && input.primaryCtaLabel?.trim()) {
+        props.ctaText = input.primaryCtaLabel.trim();
+      }
+
+      if (block.type === "cta") {
+        if (input.primaryCtaLabel?.trim()) props.buttonText = input.primaryCtaLabel.trim();
+        if (input.primaryCtaHref?.trim()) props.buttonUrl = input.primaryCtaHref.trim();
+      }
+
+      return { ...block, props };
+    });
+
+  const blocks = applyToBlocks(config.blocks);
+  const pages = config.pages?.map((page) => ({ ...page, blocks: applyToBlocks(page.blocks) }));
+  return { ...config, blocks, ...(pages ? { pages } : {}) };
+}
+
 function validateAndSanitizeSiteConfig(
   raw: unknown,
   input: CreateProjectRequest & { slug: string }
@@ -284,7 +323,7 @@ function validateAndSanitizeSiteConfig(
   if (pages) config.pages = pages;
   if (isObject(raw.theme)) config.theme = raw.theme as OpenPageThemeConfig;
 
-  return { config, removed: [...new Set(removed)] };
+  return { config: applyExplicitInputOverrides(config, input), removed: [...new Set(removed)] };
 }
 
 function authenticatedHeaders(env: Env): Headers {
