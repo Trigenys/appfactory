@@ -1,4 +1,4 @@
-import { ensurePagesProject, pagesProjectUrl } from "./cloudflare";
+import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
 import { buildLandingManifest } from "./manifest";
 import type { Env } from "./types";
@@ -79,6 +79,8 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     const manifest = buildLandingManifest(input);
     const manifestCommitSha = await replaceManifest(token, repository, manifest);
     const pagesProject = await ensurePagesProject(env, repository);
+    const productionBranch = repository.default_branch || pagesProject.production_branch || "main";
+    const deployment = await triggerPagesDeployment(env, pagesProject, productionBranch);
 
     return json(
       {
@@ -91,8 +93,12 @@ async function createProject(request: Request, env: Env): Promise<Response> {
           provider: "cloudflare-pages",
           project: pagesProject.name,
           siteUrl: pagesProjectUrl(pagesProject),
-          productionBranch: pagesProject.production_branch,
-          state: "BUILD_QUEUED"
+          productionBranch,
+          deploymentId: deployment.id,
+          deploymentUrl: deployment.url || null,
+          stage: deployment.latest_stage?.name || "queued",
+          state: deployment.latest_stage?.status || "active",
+          skipped: Boolean(deployment.is_skipped)
         }
       },
       201
