@@ -2,66 +2,96 @@
 
 Automated software delivery platform for generating, validating and deploying applications.
 
-## Current milestone — M2 Automatic Deployment
+## Current milestone — M3 Brief Specification
 
-AppFactory now provisions both the generated repository and its Cloudflare Pages project:
+M3 starts the generation engine. AppFactory can now accept a short business brief and turn it into a deterministic landing-page specification before provisioning the repository and deployment.
 
 ```text
 POST /projects
+  -> validate the brief-first request
+  -> infer industry, tone and conversion goal
+  -> choose a design recipe, motion level and section plan
+  -> emit AppFactory Manifest v2
   -> authenticate as AppFactory Bot (GitHub App)
   -> create or resume a repository from Trigenys/appfactory-landing-template
-  -> replace appfactory.json with project-specific configuration
-  -> provision a Cloudflare Pages project linked to the generated GitHub repository
-  -> Cloudflare builds `npm run build` and publishes `dist`
+  -> replace appfactory.json with the generated specification
+  -> provision/reuse a Cloudflare Pages project linked to GitHub
+  -> trigger the first production deployment
   -> future pushes to main deploy automatically
-  -> return the repository and Pages project details
 ```
 
-M2 deliberately keeps deployment deterministic: GitHub owns the generated source, Cloudflare Pages owns site builds and hosting, and AppFactory only orchestrates both systems.
+The M3.1 decision engine is deliberately deterministic. A model-based planner can be introduced later without making the React renderer itself probabilistic.
 
 ## API
 
 ### `GET /health`
 
-Returns Worker readiness for GitHub and Cloudflare runtime bindings without exposing secret values.
+Returns Worker readiness plus the active milestone and manifest version without exposing secret values.
 
 ### `POST /projects`
 
-Example request:
+Preferred M3 request:
 
 ```json
 {
-  "name": "Kamer Logistics",
-  "slug": "kamer-logistics",
-  "description": "Premium B2B logistics landing page",
-  "private": true,
-  "recipe": "corporate",
-  "animation": "subtle",
-  "heroTitle": "Logistics without the guesswork.",
-  "heroSubtitle": "A clear route from request to delivery.",
-  "primaryCtaLabel": "Request a quote",
-  "primaryCtaHref": "mailto:hello@example.com"
+  "name": "Nova Legal",
+  "slug": "nova-legal",
+  "brief": "Cabinet d'avocats premium spécialisé dans les startups technologiques en Afrique. L'objectif principal est la prise de rendez-vous.",
+  "language": "fr",
+  "audience": "Fondateurs et dirigeants de startups technologiques",
+  "private": true
 }
 ```
 
-Successful response:
+AppFactory infers a specification such as:
+
+```text
+industry  -> legal
+tone      -> premium
+goal      -> bookings
+recipe    -> luxury
+animation -> subtle
+sections  -> hero, trust, services, process, testimonials, faq, contact, final-cta
+```
+
+Legacy explicit fields (`recipe`, `animation`, `heroTitle`, `heroSubtitle`, `primaryCtaLabel`, `primaryCtaHref`) remain supported and override inferred choices when supplied.
+
+Successful response includes the repository, Manifest v2 commit and Cloudflare Pages deployment details:
 
 ```json
 {
   "status": "PROVISIONED",
-  "repository": "Trigenys/kamer-logistics",
-  "repositoryUrl": "https://github.com/Trigenys/kamer-logistics",
+  "repository": "Trigenys/nova-legal",
+  "repositoryUrl": "https://github.com/Trigenys/nova-legal",
   "defaultBranch": "main",
   "manifestCommitSha": "...",
+  "manifestVersion": 2,
   "deployment": {
     "provider": "cloudflare-pages",
-    "project": "kamer-logistics",
-    "siteUrl": "https://kamer-logistics.pages.dev",
+    "project": "nova-legal",
+    "siteUrl": "https://nova-legal.pages.dev",
     "productionBranch": "main",
-    "state": "BUILD_QUEUED"
+    "deploymentId": "...",
+    "stage": "queued",
+    "state": "idle",
+    "skipped": false
   }
 }
 ```
+
+## Manifest v2
+
+Manifest v2 adds structured generation intent while temporarily preserving the v1 rendering fields as a compatibility bridge:
+
+- `strategy`: brief, audience, industry, tone and conversion goal
+- `brand`: tone, palette and typography direction
+- `design`: recipe, animation and density
+- `sections`: ordered section plan
+- `seo`: generated title and description
+- `motion`: motion policy and reduced-motion requirement
+- `content`: generated hero, feature and final CTA content
+
+M3.4 will make the frontend renderer consume `content` and `sections` directly and remove the compatibility duplication.
 
 ## Runtime
 
@@ -80,9 +110,15 @@ Optional variables:
 - `GITHUB_OWNER` (defaults to `Trigenys`)
 - `GITHUB_TEMPLATE_OWNER` (defaults to `GITHUB_OWNER`)
 - `GITHUB_TEMPLATE_REPO` (defaults to `appfactory-landing-template`)
+- `GITHUB_COMMIT_AUTHOR_NAME`
+- `GITHUB_COMMIT_AUTHOR_EMAIL`
 - `ENVIRONMENT`
 
 GitHub downloads App private keys as PEM files. AppFactory accepts both the native GitHub RSA PEM format (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) directly, so no manual key conversion is required. The legacy `GITHUB_PRIVATE_KEY_PKCS8` secret name remains supported as a fallback.
+
+### Commit attribution
+
+Generated commits use the human project owner as the Git author and the AppFactory GitHub App as the technical committer. The default author is the `EagleFox31` GitHub account via its GitHub noreply address; the optional commit-author variables can override that identity.
 
 ### Cloudflare GitHub access
 
@@ -109,4 +145,4 @@ Store local secrets in `.dev.vars`; never commit that file.
 
 ## Architecture boundary
 
-`appfactory` owns orchestration, repository generation and hosting provisioning. `appfactory-landing-template` owns the generated frontend contract. `appfactory-project-automation` remains a separate reusable GitHub Project/Issue/PR automation brick.
+`appfactory` owns orchestration, specification generation, repository generation and hosting provisioning. `appfactory-landing-template` owns the generated frontend contract. `appfactory-project-automation` remains a separate reusable GitHub Project/Issue/PR automation brick.
