@@ -126,7 +126,7 @@ export default {
       return json({
         status: runtimeReady(env) ? "ok" : "degraded",
         service: "appfactory-api",
-        milestone: "M3-brief-specification",
+        milestone: "M3-modular-renderer",
         manifestVersion: 2,
         runtimeConfig: config
       });
