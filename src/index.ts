@@ -1,3 +1,4 @@
+import { ensurePagesProject, pagesProjectUrl } from "./cloudflare";
 import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
 import { buildLandingManifest } from "./manifest";
 import type { Env } from "./types";
@@ -12,9 +13,15 @@ function json(body: unknown, status = 200): Response {
 
 function runtimeConfig(env: Env) {
   return {
-    appId: Boolean(env.GITHUB_APP_ID),
-    installationId: Boolean(env.GITHUB_INSTALLATION_ID),
-    privateKey: Boolean(env.GITHUB_PRIVATE_KEY || env.GITHUB_PRIVATE_KEY_PKCS8)
+    github: {
+      appId: Boolean(env.GITHUB_APP_ID),
+      installationId: Boolean(env.GITHUB_INSTALLATION_ID),
+      privateKey: Boolean(env.GITHUB_PRIVATE_KEY || env.GITHUB_PRIVATE_KEY_PKCS8)
+    },
+    cloudflare: {
+      accountId: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
+      apiToken: Boolean(env.CLOUDFLARE_API_TOKEN)
+    }
   };
 }
 
@@ -22,13 +29,26 @@ function assertRuntimeConfig(env: Env): void {
   const config = runtimeConfig(env);
   const missing: string[] = [];
 
-  if (!config.appId) missing.push("GITHUB_APP_ID");
-  if (!config.installationId) missing.push("GITHUB_INSTALLATION_ID");
-  if (!config.privateKey) missing.push("GITHUB_PRIVATE_KEY");
+  if (!config.github.appId) missing.push("GITHUB_APP_ID");
+  if (!config.github.installationId) missing.push("GITHUB_INSTALLATION_ID");
+  if (!config.github.privateKey) missing.push("GITHUB_PRIVATE_KEY");
+  if (!config.cloudflare.accountId) missing.push("CLOUDFLARE_ACCOUNT_ID");
+  if (!config.cloudflare.apiToken) missing.push("CLOUDFLARE_API_TOKEN");
 
   if (missing.length > 0) {
     throw new Error(`Missing Worker runtime configuration: ${missing.join(", ")}.`);
   }
+}
+
+function runtimeReady(env: Env): boolean {
+  const config = runtimeConfig(env);
+  return (
+    config.github.appId &&
+    config.github.installationId &&
+    config.github.privateKey &&
+    config.cloudflare.accountId &&
+    config.cloudflare.apiToken
+  );
 }
 
 async function createProject(request: Request, env: Env): Promise<Response> {
@@ -58,14 +78,22 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     const repository = await createRepositoryFromTemplate(token, env, input);
     const manifest = buildLandingManifest(input);
     const manifestCommitSha = await replaceManifest(token, repository, manifest);
+    const pagesProject = await ensurePagesProject(env, repository);
 
     return json(
       {
-        status: "CREATED",
+        status: "PROVISIONED",
         repository: repository.full_name,
         repositoryUrl: repository.html_url,
         defaultBranch: repository.default_branch,
-        manifestCommitSha
+        manifestCommitSha,
+        deployment: {
+          provider: "cloudflare-pages",
+          project: pagesProject.name,
+          siteUrl: pagesProjectUrl(pagesProject),
+          productionBranch: pagesProject.production_branch,
+          state: "BUILD_QUEUED"
+        }
       },
       201
     );
@@ -89,9 +117,9 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       const config = runtimeConfig(env);
       return json({
-        status: config.appId && config.installationId && config.privateKey ? "ok" : "degraded",
+        status: runtimeReady(env) ? "ok" : "degraded",
         service: "appfactory-api",
-        milestone: "M1-repository-factory",
+        milestone: "M2-auto-deploy",
         runtimeConfig: config
       });
     }
