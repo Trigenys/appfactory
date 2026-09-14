@@ -8,6 +8,8 @@ import type {
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
+const DEFAULT_COMMIT_AUTHOR_NAME = "EagleFox31";
+const DEFAULT_COMMIT_AUTHOR_EMAIL = "86088743+EagleFox31@users.noreply.github.com";
 
 class GitHubApiError extends Error {
   constructor(
@@ -17,6 +19,13 @@ class GitHubApiError extends Error {
   ) {
     super(`GitHub API ${status} on ${path}: ${detail}`);
   }
+}
+
+function commitAuthor(env: Env): { name: string; email: string } {
+  return {
+    name: env.GITHUB_COMMIT_AUTHOR_NAME || DEFAULT_COMMIT_AUTHOR_NAME,
+    email: env.GITHUB_COMMIT_AUTHOR_EMAIL || DEFAULT_COMMIT_AUTHOR_EMAIL
+  };
 }
 
 function base64Url(value: Uint8Array | string): string {
@@ -294,7 +303,8 @@ async function materializeTemplate(
       body: JSON.stringify({
         message: "chore(appfactory): materialize landing template",
         tree: targetTree.sha,
-        parents: []
+        parents: [],
+        author: commitAuthor(env)
       })
     }
   );
@@ -375,6 +385,7 @@ export async function createRepositoryFromTemplate(
 
 export async function replaceManifest(
   token: string,
+  env: Env,
   repository: GitHubRepository,
   manifest: unknown
 ): Promise<string> {
@@ -387,7 +398,8 @@ export async function replaceManifest(
       message: "chore(appfactory): configure generated project",
       content: toBase64(`${JSON.stringify(manifest, null, 2)}\n`),
       sha: current.sha,
-      branch: repository.default_branch
+      branch: repository.default_branch,
+      author: commitAuthor(env)
     })
   });
   return result.commit.sha;
