@@ -77,7 +77,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     const token = await getInstallationToken(env);
     const repository = await createRepositoryFromTemplate(token, env, input);
     const manifest = buildLandingManifest(input);
-    const manifestCommitSha = await replaceManifest(token, repository, manifest);
+    const manifestCommitSha = await replaceManifest(token, env, repository, manifest);
     const pagesProject = await ensurePagesProject(env, repository);
     const productionBranch = repository.default_branch || pagesProject.production_branch || "main";
     const deployment = await triggerPagesDeployment(env, pagesProject, productionBranch);
