@@ -9,6 +9,8 @@ export interface Env {
   GITHUB_OWNER?: string;
   GITHUB_TEMPLATE_OWNER?: string;
   GITHUB_TEMPLATE_REPO?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
   ENVIRONMENT?: string;
 }
 
@@ -26,11 +28,16 @@ export interface CreateProjectRequest {
 }
 
 export interface GitHubRepository {
+  id?: number;
   name: string;
   full_name: string;
   html_url: string;
   default_branch: string;
   size?: number;
+  owner?: {
+    login: string;
+    id: number;
+  };
   template_repository?: {
     full_name: string;
   } | null;
@@ -44,4 +51,30 @@ export interface GitHubContentCommit {
   commit: {
     sha: string;
   };
+}
+
+export interface CloudflarePagesProject {
+  id: string;
+  name: string;
+  subdomain?: string;
+  production_branch: string;
+  source?: {
+    type: "github" | "gitlab";
+    config: {
+      owner?: string;
+      owner_id?: string;
+      repo_id?: string;
+      repo_name?: string;
+      production_branch?: string;
+      production_deployments_enabled?: boolean;
+      preview_deployment_setting?: "all" | "none" | "custom";
+    };
+  };
+}
+
+export interface CloudflareApiResponse<T> {
+  success: boolean;
+  errors: Array<{ code: number; message: string }>;
+  messages: Array<{ code: number; message: string }>;
+  result: T;
 }
