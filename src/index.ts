@@ -89,6 +89,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
         repositoryUrl: repository.html_url,
         defaultBranch: repository.default_branch,
         manifestCommitSha,
+        manifestVersion: 2,
         deployment: {
           provider: "cloudflare-pages",
           project: pagesProject.name,
@@ -125,7 +126,8 @@ export default {
       return json({
         status: runtimeReady(env) ? "ok" : "degraded",
         service: "appfactory-api",
-        milestone: "M2-auto-deploy",
+        milestone: "M3-brief-specification",
+        manifestVersion: 2,
         runtimeConfig: config
       });
     }
