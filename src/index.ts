@@ -5,6 +5,11 @@ import { buildLandingManifest } from "./manifest";
 import type { Env } from "./types";
 import { validateCreateProject } from "./validation";
 
+type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
+type ProjectInputResult =
+  | { input: ValidatedProjectInput }
+  | { response: Response };
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
     status,
@@ -59,18 +64,18 @@ function runtimeReady(env: Env): boolean {
   );
 }
 
-async function readProjectInput(request: Request) {
+async function readProjectInput(request: Request): Promise<ProjectInputResult> {
   let payload: unknown;
   try {
     payload = await request.json();
   } catch {
     return {
       response: json({ error: "INVALID_JSON", message: "Request body must contain valid JSON." }, 400)
-    } as const;
+    };
   }
 
   try {
-    return { input: validateCreateProject(payload) } as const;
+    return { input: validateCreateProject(payload) };
   } catch (error) {
     return {
       response: json(
@@ -80,7 +85,7 @@ async function readProjectInput(request: Request) {
         },
         400
       )
-    } as const;
+    };
   }
 }
 
