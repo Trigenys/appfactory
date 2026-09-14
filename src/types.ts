@@ -72,6 +72,25 @@ export interface CloudflarePagesProject {
   };
 }
 
+export interface CloudflarePagesDeployment {
+  id: string;
+  url?: string;
+  environment?: "production" | "preview";
+  is_skipped?: boolean;
+  latest_stage?: {
+    name: "queued" | "initialize" | "clone_repo" | "build" | "deploy";
+    status: "success" | "idle" | "active" | "failure" | "canceled";
+  };
+  deployment_trigger?: {
+    type: "github:push" | "ad_hoc" | "deploy_hook";
+    metadata?: {
+      branch?: string;
+      commit_hash?: string;
+      commit_message?: string;
+    };
+  };
+}
+
 export interface CloudflareApiResponse<T> {
   success: boolean;
   errors: Array<{ code: number; message: string }>;
