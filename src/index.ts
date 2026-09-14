@@ -1,4 +1,5 @@
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
+import { generateWithOpenPage, openPageConfigured } from "./engines/openpage";
 import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
 import { buildLandingManifest } from "./manifest";
 import type { Env } from "./types";
@@ -21,6 +22,13 @@ function runtimeConfig(env: Env) {
     cloudflare: {
       accountId: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
       apiToken: Boolean(env.CLOUDFLARE_API_TOKEN)
+    },
+    engines: {
+      native: { configured: true },
+      openpage: {
+        configured: openPageConfigured(env),
+        apiToken: Boolean(env.OPENPAGE_API_TOKEN)
+      }
     }
   };
 }
@@ -51,24 +59,44 @@ function runtimeReady(env: Env): boolean {
   );
 }
 
-async function createProject(request: Request, env: Env): Promise<Response> {
+async function readProjectInput(request: Request) {
   let payload: unknown;
   try {
     payload = await request.json();
   } catch {
-    return json({ error: "INVALID_JSON", message: "Request body must contain valid JSON." }, 400);
+    return {
+      response: json({ error: "INVALID_JSON", message: "Request body must contain valid JSON." }, 400)
+    } as const;
   }
 
-  let input;
   try {
-    input = validateCreateProject(payload);
+    return { input: validateCreateProject(payload) } as const;
   } catch (error) {
+    return {
+      response: json(
+        {
+          error: "INVALID_PROJECT",
+          message: error instanceof Error ? error.message : "Invalid project request."
+        },
+        400
+      )
+    } as const;
+  }
+}
+
+async function createProject(request: Request, env: Env): Promise<Response> {
+  const parsed = await readProjectInput(request);
+  if ("response" in parsed) return parsed.response;
+  const { input } = parsed;
+
+  if (input.engine === "openpage") {
     return json(
       {
-        error: "INVALID_PROJECT",
-        message: error instanceof Error ? error.message : "Invalid project request."
+        error: "OPENPAGE_POC_ONLY",
+        message:
+          "OpenPage generation is connected as a POC, but repository rendering/export is not wired yet. Use POST /engines/openpage/generate to validate the engine output."
       },
-      400
+      501
     );
   }
 
@@ -85,6 +113,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     return json(
       {
         status: "PROVISIONED",
+        generationEngine: "native",
         repository: repository.full_name,
         repositoryUrl: repository.html_url,
         defaultBranch: repository.default_branch,
@@ -117,6 +146,33 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   }
 }
 
+async function generateOpenPage(request: Request, env: Env): Promise<Response> {
+  const parsed = await readProjectInput(request);
+  if ("response" in parsed) return parsed.response;
+
+  try {
+    const result = await generateWithOpenPage(env, {
+      ...parsed.input,
+      engine: "openpage"
+    });
+
+    return json(
+      {
+        status: "GENERATED",
+        engine: result.engine,
+        upstream: result.upstream,
+        config: result.config,
+        quality: result.quality
+      },
+      200
+    );
+  } catch (error) {
+    console.error("OpenPage generation failed", error);
+    const message = error instanceof Error ? error.message : "OpenPage generation failed.";
+    return json({ error: "OPENPAGE_GENERATION_FAILED", message }, 502);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -126,7 +182,7 @@ export default {
       return json({
         status: runtimeReady(env) ? "ok" : "degraded",
         service: "appfactory-api",
-        milestone: "M3-modular-renderer",
+        milestone: "M3-openpage-engine-poc",
         manifestVersion: 2,
         runtimeConfig: config
       });
@@ -134,6 +190,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/projects") {
       return createProject(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/engines/openpage/generate") {
+      return generateOpenPage(request, env);
     }
 
     return json({ error: "NOT_FOUND" }, 404);
