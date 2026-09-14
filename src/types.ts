@@ -1,5 +1,31 @@
 export type DesignRecipe = "corporate" | "luxury" | "saas";
 export type AnimationLevel = "none" | "subtle" | "expressive";
+export type ProjectLanguage = "fr" | "en";
+export type Industry =
+  | "legal"
+  | "technology"
+  | "finance"
+  | "healthcare"
+  | "education"
+  | "logistics"
+  | "real-estate"
+  | "ecommerce"
+  | "hospitality"
+  | "creative"
+  | "general";
+export type BrandTone = "professional" | "premium" | "bold" | "friendly" | "minimal";
+export type ConversionGoal = "leads" | "bookings" | "sales" | "signup" | "contact" | "awareness";
+export type SectionKind =
+  | "hero"
+  | "trust"
+  | "services"
+  | "features"
+  | "process"
+  | "testimonials"
+  | "pricing"
+  | "faq"
+  | "contact"
+  | "final-cta";
 
 export interface Env {
   GITHUB_APP_ID: string;
@@ -21,12 +47,33 @@ export interface CreateProjectRequest {
   slug?: string;
   description?: string;
   private?: boolean;
+  brief?: string;
+  language?: ProjectLanguage;
+  audience?: string;
+  goal?: ConversionGoal;
   recipe?: DesignRecipe;
   animation?: AnimationLevel;
   heroTitle?: string;
   heroSubtitle?: string;
   primaryCtaLabel?: string;
   primaryCtaHref?: string;
+}
+
+export interface ProjectSpecification {
+  brief: string;
+  language: ProjectLanguage;
+  audience?: string;
+  industry: Industry;
+  tone: BrandTone;
+  goal: ConversionGoal;
+  design: {
+    recipe: DesignRecipe;
+    animation: AnimationLevel;
+    palette: "navy-mint" | "midnight-gold" | "electric-indigo";
+    typography: "grotesk" | "editorial" | "geometric";
+    density: "airy" | "balanced";
+  };
+  sections: SectionKind[];
 }
 
 export interface GitHubRepository {
