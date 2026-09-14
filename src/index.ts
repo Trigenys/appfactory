@@ -1,13 +1,21 @@
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
+import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
   exportWithOpenPage,
   generateWithOpenPage,
   openPageConfigured
 } from "./engines/openpage";
 import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
+import {
+  getRepositoryHeadSha,
+  projectContentHash,
+  projectRequestHash,
+  readProjectState,
+  saveProjectState
+} from "./idempotency";
 import { buildLandingManifest } from "./manifest";
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
-import type { Env } from "./types";
+import type { Env, GitHubRepository } from "./types";
 import { validateCreateProject } from "./validation";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
@@ -96,10 +104,15 @@ async function readProjectInput(request: Request): Promise<ProjectInputResult> {
   }
 }
 
-async function provisionDeployment(env: Env, repository: Parameters<typeof ensurePagesProject>[1]) {
+async function provisionDeployment(
+  env: Env,
+  repository: GitHubRepository,
+  commitSha: string
+) {
   const pagesProject = await ensurePagesProject(env, repository);
   const productionBranch = repository.default_branch || pagesProject.production_branch || "main";
-  const deployment = await triggerPagesDeployment(env, pagesProject, productionBranch);
+  const existing = await findReusablePagesDeployment(env, pagesProject, commitSha, true);
+  const deployment = existing || await triggerPagesDeployment(env, pagesProject, productionBranch);
 
   return {
     provider: "cloudflare-pages" as const,
@@ -110,7 +123,8 @@ async function provisionDeployment(env: Env, repository: Parameters<typeof ensur
     deploymentUrl: deployment.url || null,
     stage: deployment.latest_stage?.name || "queued",
     state: deployment.latest_stage?.status || "active",
-    skipped: Boolean(deployment.is_skipped)
+    skipped: Boolean(deployment.is_skipped),
+    reused: Boolean(existing)
   };
 }
 
@@ -119,10 +133,56 @@ async function createNativeProject(
   token: string,
   input: ValidatedProjectInput
 ): Promise<Response> {
-  const repository = await createRepositoryFromTemplate(token, env, input);
-  const manifest = buildLandingManifest(input);
-  const manifestCommitSha = await replaceManifest(token, env, repository, manifest);
-  const deployment = await provisionDeployment(env, repository);
+  const normalizedInput = { ...input, engine: "native" as const };
+  const repository = await createRepositoryFromTemplate(token, env, normalizedInput);
+  const requestHash = await projectRequestHash(normalizedInput);
+  const previousState = await readProjectState(token, repository);
+
+  if (previousState?.engine === "native" && previousState.requestHash === requestHash) {
+    const siteCommitSha = await getRepositoryHeadSha(token, repository);
+    const deployment = await provisionDeployment(env, repository, siteCommitSha);
+    return json(
+      {
+        status: "PROVISIONED",
+        generationEngine: "native",
+        repository: repository.full_name,
+        repositoryUrl: repository.html_url,
+        defaultBranch: repository.default_branch,
+        siteCommitSha,
+        manifestVersion: 2,
+        idempotency: {
+          key: requestHash,
+          replay: true,
+          contentChanged: false
+        },
+        deployment
+      },
+      200
+    );
+  }
+
+  const manifest = buildLandingManifest(normalizedInput);
+  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+  const contentHash = await projectContentHash([manifestText]);
+
+  let manifestCommitSha: string;
+  let contentChanged = true;
+  if (previousState?.engine === "native" && previousState.contentHash === contentHash) {
+    manifestCommitSha = await getRepositoryHeadSha(token, repository);
+    contentChanged = false;
+  } else {
+    manifestCommitSha = await replaceManifest(token, env, repository, manifest);
+  }
+
+  const checkpoint = await saveProjectState(token, env, repository, {
+    schemaVersion: 1,
+    engine: "native",
+    requestHash,
+    contentHash,
+    complete: true
+  });
+  const siteCommitSha = checkpoint.commitSha;
+  const deployment = await provisionDeployment(env, repository, siteCommitSha);
 
   return json(
     {
@@ -132,7 +192,14 @@ async function createNativeProject(
       repositoryUrl: repository.html_url,
       defaultBranch: repository.default_branch,
       manifestCommitSha,
+      siteCommitSha,
       manifestVersion: 2,
+      idempotency: {
+        key: requestHash,
+        replay: false,
+        contentChanged,
+        checkpointChanged: checkpoint.changed
+      },
       deployment
     },
     201
@@ -150,19 +217,66 @@ async function createOpenPageProject(
     );
   }
 
-  const generation = await generateWithOpenPage(env, { ...input, engine: "openpage" });
-  const html = await exportWithOpenPage(env, input, generation.config);
-  const { repository, created } = await createOpenPageRepository(token, env, input);
-  const siteCommitSha = await commitOpenPageSite(
-    token,
-    env,
-    repository,
-    created,
-    input,
-    generation.config,
-    html
-  );
-  const deployment = await provisionDeployment(env, repository);
+  const normalizedInput = { ...input, engine: "openpage" as const };
+  const { repository, created } = await createOpenPageRepository(token, env, normalizedInput);
+  const requestHash = await projectRequestHash(normalizedInput);
+  const previousState = await readProjectState(token, repository);
+
+  if (previousState?.engine === "openpage" && previousState.requestHash === requestHash) {
+    const siteCommitSha = await getRepositoryHeadSha(token, repository);
+    const deployment = await provisionDeployment(env, repository, siteCommitSha);
+    return json(
+      {
+        status: "PROVISIONED",
+        generationEngine: "openpage",
+        engineRepository: "Trigenys/appfactory-openpage-engine",
+        repository: repository.full_name,
+        repositoryUrl: repository.html_url,
+        defaultBranch: repository.default_branch,
+        siteCommitSha,
+        openPageConfigVersion: 1,
+        idempotency: {
+          key: requestHash,
+          replay: true,
+          contentChanged: false
+        },
+        deployment
+      },
+      200
+    );
+  }
+
+  const generation = await generateWithOpenPage(env, normalizedInput);
+  const html = await exportWithOpenPage(env, normalizedInput, generation.config);
+  const configText = `${JSON.stringify(generation.config, null, 2)}\n`;
+  const contentHash = await projectContentHash([configText, html]);
+
+  let siteContentCommitSha: string;
+  let contentChanged = true;
+  if (previousState?.engine === "openpage" && previousState.contentHash === contentHash) {
+    siteContentCommitSha = await getRepositoryHeadSha(token, repository);
+    contentChanged = false;
+  } else {
+    siteContentCommitSha = await commitOpenPageSite(
+      token,
+      env,
+      repository,
+      created,
+      normalizedInput,
+      generation.config,
+      html
+    );
+  }
+
+  const checkpoint = await saveProjectState(token, env, repository, {
+    schemaVersion: 1,
+    engine: "openpage",
+    requestHash,
+    contentHash,
+    complete: true
+  });
+  const siteCommitSha = checkpoint.commitSha;
+  const deployment = await provisionDeployment(env, repository, siteCommitSha);
 
   return json(
     {
@@ -172,9 +286,16 @@ async function createOpenPageProject(
       repository: repository.full_name,
       repositoryUrl: repository.html_url,
       defaultBranch: repository.default_branch,
+      siteContentCommitSha,
       siteCommitSha,
       openPageConfigVersion: 1,
       quality: generation.quality,
+      idempotency: {
+        key: requestHash,
+        replay: false,
+        contentChanged,
+        checkpointChanged: checkpoint.changed
+      },
       deployment
     },
     201
@@ -244,6 +365,7 @@ export default {
         service: "appfactory-api",
         milestone: "M3-openpage-end-to-end",
         manifestVersion: 2,
+        idempotencyVersion: 1,
         runtimeConfig: config
       });
     }
