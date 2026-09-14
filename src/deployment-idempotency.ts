@@ -32,17 +32,28 @@ async function listDeployments(
     }
   });
   const text = await response.text();
-  if (!text.trim()) return [];
+
+  if (!text.trim()) {
+    throw new Error(`Cloudflare returned an empty deployment-list response for ${project.name}.`);
+  }
 
   let payload: CloudflareApiResponse<CloudflarePagesDeployment[]>;
   try {
     payload = JSON.parse(text) as CloudflareApiResponse<CloudflarePagesDeployment[]>;
   } catch {
-    return [];
+    throw new Error(`Cloudflare returned malformed deployment-list JSON for ${project.name}.`);
   }
 
-  if (!response.ok || !payload.success || !Array.isArray(payload.result)) return [];
+  if (!response.ok || !payload.success || !Array.isArray(payload.result)) {
+    const detail = payload.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") || `HTTP ${response.status}`;
+    throw new Error(`Unable to inspect Cloudflare Pages deployments for ${project.name}: ${detail}`);
+  }
+
   return payload.result;
+}
+
+function sameCommit(left: string, right: string): boolean {
+  return left === right || left.startsWith(right) || right.startsWith(left);
 }
 
 function deploymentMatchesCommit(
@@ -50,7 +61,7 @@ function deploymentMatchesCommit(
   commitSha: string
 ): boolean {
   const deployedCommit = deployment.deployment_trigger?.metadata?.commit_hash;
-  if (!deployedCommit || deployedCommit !== commitSha) return false;
+  if (!deployedCommit || !sameCommit(deployedCommit, commitSha)) return false;
   if (deployment.environment && deployment.environment !== "production") return false;
 
   const status = deployment.latest_stage?.status;
@@ -63,11 +74,14 @@ export async function findReusablePagesDeployment(
   commitSha: string,
   waitForGitPush = true
 ): Promise<CloudflarePagesDeployment | null> {
-  for (let attempt = 0; attempt < (waitForGitPush ? 2 : 1); attempt += 1) {
+  const attempts = waitForGitPush ? 4 : 1;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     const deployments = await listDeployments(env, project);
     const match = deployments.find((deployment) => deploymentMatchesCommit(deployment, commitSha));
     if (match) return match;
-    if (attempt === 0 && waitForGitPush) await sleep(1200);
+    if (attempt < attempts - 1) await sleep(1000);
   }
+
   return null;
 }
