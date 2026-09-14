@@ -92,9 +92,7 @@ function inferSections(industry: Industry, goal: ConversionGoal): SectionKind[] 
     sections.push("features");
   }
 
-  sections.push("process", "testimonials");
-  if (industry === "technology" && goal === "sales") sections.push("pricing");
-  sections.push("faq");
+  sections.push("process", "faq");
   if (goal === "bookings" || goal === "contact" || goal === "leads") sections.push("contact");
   sections.push("final-cta");
   return sections;
