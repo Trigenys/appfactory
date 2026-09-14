@@ -115,24 +115,34 @@ export async function readProjectState(
   const [owner, repo] = repository.full_name.split("/");
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${STATE_PATH}?ref=${encodeURIComponent(repository.default_branch || "main")}`;
 
+  let file: GitHubContentResponse;
   try {
-    const file = await githubRequest<GitHubContentResponse>(token, path);
-    if (file.encoding !== "base64" || !file.content) return null;
-    const parsed = JSON.parse(decodeBase64Utf8(file.content)) as Partial<ProjectIdempotencyState>;
-    if (
-      parsed.schemaVersion !== 1 ||
-      (parsed.engine !== "native" && parsed.engine !== "openpage") ||
-      typeof parsed.requestHash !== "string" ||
-      typeof parsed.contentHash !== "string" ||
-      parsed.complete !== true
-    ) {
-      return null;
-    }
-    return parsed as ProjectIdempotencyState;
+    file = await githubRequest<GitHubContentResponse>(token, path);
   } catch (error) {
     if ((error as Error & { status?: number }).status === 404) return null;
+    throw error;
+  }
+
+  if (file.encoding !== "base64" || !file.content) return null;
+
+  let parsed: Partial<ProjectIdempotencyState>;
+  try {
+    parsed = JSON.parse(decodeBase64Utf8(file.content)) as Partial<ProjectIdempotencyState>;
+  } catch {
     return null;
   }
+
+  if (
+    parsed.schemaVersion !== 1 ||
+    (parsed.engine !== "native" && parsed.engine !== "openpage") ||
+    typeof parsed.requestHash !== "string" ||
+    typeof parsed.contentHash !== "string" ||
+    parsed.complete !== true
+  ) {
+    return null;
+  }
+
+  return parsed as ProjectIdempotencyState;
 }
 
 export async function getRepositoryHeadSha(
