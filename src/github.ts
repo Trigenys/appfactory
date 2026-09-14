@@ -85,13 +85,19 @@ function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
   return der(0x30, concatBytes(version, rsaAlgorithmIdentifier, privateKey));
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer as ArrayBuffer;
+}
+
 function pemToPkcs8(pem: string): ArrayBuffer {
   if (pem.includes("BEGIN PRIVATE KEY")) {
-    return decodePem(pem, "PRIVATE KEY").buffer;
+    return toArrayBuffer(decodePem(pem, "PRIVATE KEY"));
   }
 
   if (pem.includes("BEGIN RSA PRIVATE KEY")) {
-    return pkcs1ToPkcs8(decodePem(pem, "RSA PRIVATE KEY")).buffer;
+    return toArrayBuffer(pkcs1ToPkcs8(decodePem(pem, "RSA PRIVATE KEY")));
   }
 
   throw new Error(
