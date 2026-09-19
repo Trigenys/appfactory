@@ -163,6 +163,56 @@ Healthcare, insurance, banking, fintech, education, public-service portals, B2B 
 
 ---
 
+## 4. Academic Institutional Premium
+
+**Preset ID:** `academic-institutional-premium`
+
+### Character
+
+Ambitious, credible and future-facing. The interface should make an institution feel established, international and outcome-driven without becoming bureaucratic or visually heavy.
+
+### Visual language
+
+- Bright white base with deep emerald / forest green as the institutional anchor.
+- Optional navy or charcoal support tones for high-contrast sections.
+- Fresh green accents for CTAs, icons and success indicators.
+- Large campus, student and learning-environment photography.
+- Strong, direct sans-serif typography with selective emphasis for key words.
+- Spacious modular layouts balancing academic information with human storytelling.
+- Stat cards and proof points integrated close to the hero.
+- Dark institutional bands to structure long pages and reinforce credibility.
+- Clear icon-led program/category navigation.
+- Editorial image cards for news, events and student stories.
+
+### Useful modules
+
+- Aspirational hero with a clear academic or career-oriented promise.
+- Explore programs / departments.
+- Admissions and application CTA.
+- Outcome metrics: employment, students, programs, years of operation.
+- Campus / learning environment section.
+- Program category cards.
+- Student testimonials and alumni stories.
+- Events calendar.
+- News and updates.
+- Campus tour or video block.
+- International student / exchange section.
+- Final enrollment CTA and structured institutional footer.
+
+### Best suited to
+
+Universities, colleges, academies, training centers, edtech institutions, scholarship portals and professional certification organizations.
+
+### Avoid
+
+- Generic government-portal aesthetics.
+- Huge text-heavy blocks about the institution before showing programs or outcomes.
+- Excessively corporate stock imagery.
+- Overly playful education visuals when targeting higher education or executive learning.
+- Hiding admissions/application actions deep in navigation.
+
+---
+
 ## Selection rule for AppFactory
 
 AppFactory should choose the profile from the business and conversion context, not from an arbitrary industry-to-template mapping.
@@ -172,6 +222,7 @@ Use:
 - `editorial-lifestyle-premium` when emotion, atmosphere, craftsmanship or lifestyle perception is central to conversion.
 - `tech-commerce-premium` when the product itself is the main visual object and fast commerce interaction matters.
 - `professional-service-premium` when trust, expertise, clarity and service credibility are primary.
+- `academic-institutional-premium` when institutional authority, programs, student outcomes and application conversion must coexist on the same interface.
 
 If a product sits between profiles, combine only compatible traits. Do not merge entire visual systems blindly.
 
