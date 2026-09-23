@@ -33,13 +33,15 @@ Admin automation (`Authorization: Bearer $ADMIN_API_KEY`):
 
 ## Bootstrap
 
-1. Install dependencies with `npm install`.
-2. Create the database: `npx wrangler d1 create __DATABASE_NAME__`.
-3. Replace `REPLACE_AFTER_WRANGLER_D1_CREATE` in `wrangler.jsonc` with the returned database id.
-4. Apply migrations: `npm run d1:migrate:remote`.
-5. Configure Worker secrets: `ADMIN_API_KEY`, `SERVICE_API_KEY`, `LICENSE_PRIVATE_KEY_PKCS8_B64`, `LICENSE_PUBLIC_KEY_SPKI_B64`.
-6. Run `npm run typecheck`, then deploy with `npm run deploy`.
-7. Add the repository secret `PROJECT_TOKEN` and manually run `Project automation` once with an empty issue number to bootstrap the GitHub Project.
+AppFactory provisions the D1 database, writes the real database UUID into `wrangler.jsonc`, connects this repository to native Cloudflare Workers Builds and triggers the first production build. The production build runs remote D1 migrations before `wrangler deploy`.
+
+Remaining operator-owned configuration:
+
+1. Configure Worker secrets: `ADMIN_API_KEY`, `SERVICE_API_KEY`, `LICENSE_PRIVATE_KEY_PKCS8_B64`, `LICENSE_PUBLIC_KEY_SPKI_B64`.
+2. Reuse an existing project-capable `PROJECT_TOKEN` if one is already available to this repository, then manually run `Project automation` once with an empty issue number to bootstrap the GitHub Project.
+3. For local development only, run `npm install`, `npm run d1:migrate:local` and `npm run dev`.
+
+Do not create a second Cloudflare deployment token in this repository. Cloudflare delivery is owned by the Workers Builds connection provisioned by AppFactory.
 
 ## Offline licensing rule
 
@@ -47,4 +49,4 @@ The desktop client gets only the Ed25519 public key. The private signing key rem
 
 ## Non-goals for v1
 
-Billing-provider integration, direct end-user authentication, generic RBAC/ABAC and automatic deployment on merge are intentionally outside the first blueprint.
+Billing-provider integration, direct end-user authentication and generic RBAC/ABAC are intentionally outside the first blueprint.
