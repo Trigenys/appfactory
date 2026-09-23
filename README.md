@@ -81,9 +81,9 @@ Example:
 
 ## Service project blueprints
 
-AppFactory can also provision backend service repositories through `projectType: "service"`. The first preset is `entitlements`, which generates a Cloudflare Worker + D1 entitlement service with online checks, short-lived Ed25519 offline grants, CI and AppFactory Project Automation already wired.
+AppFactory can also provision backend services through `projectType: "service"`. The first preset is `entitlements`, which generates the service repository, provisions/reuses D1, wires the real database UUID into Wrangler, creates/reuses the Cloudflare Worker, connects native Workers Builds, runs remote D1 migrations and triggers the first production build. Online checks, short-lived Ed25519 offline grants, CI and AppFactory Project Automation are included in the generated repository.
 
-Service repositories intentionally bypass the landing renderer and Cloudflare Pages provisioning. See [Service project blueprints](docs/service-blueprints.md) for the request contract, ownership boundaries and idempotency model.
+Service repositories intentionally bypass the landing renderer and Cloudflare Pages. See [Service project blueprints](docs/service-blueprints.md) for the request contract, Cloudflare delivery path, ownership boundaries and idempotency model.
 
 ## Manifest v2
 
@@ -109,7 +109,7 @@ Required Worker runtime variables/secrets:
 - `GITHUB_INSTALLATION_ID`
 - `GITHUB_PRIVATE_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` — secret with Cloudflare Pages Edit / Pages Write access for the target account
+- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service provisioning additionally needs D1 Read/Write, Workers Scripts Read/Write and Workers Builds Configuration Edit.
 
 Optional variables:
 
@@ -120,6 +120,8 @@ Optional variables:
 - `GITHUB_COMMIT_AUTHOR_EMAIL`
 - `OPENPAGE_GENERATOR_URL` — self-hosted OpenPage base URL or full `/api/generate` URL
 - `OPENPAGE_API_TOKEN` — optional bearer token for a protected Trigenys OpenPage deployment
+- `CLOUDFLARE_BUILD_TOKEN_UUID` — optional existing Workers Builds token UUID when automatic discovery is ambiguous
+- `CLOUDFLARE_BUILD_TOKEN_SOURCE_WORKER` — optional Worker used to discover an existing build token; defaults to `appfactory-api`
 - `ENVIRONMENT`
 
 GitHub downloads App private keys as PEM files. AppFactory accepts both the native GitHub RSA PEM format (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) directly, so no manual key conversion is required. The legacy `GITHUB_PRIVATE_KEY_PKCS8` secret name remains supported as a fallback.
