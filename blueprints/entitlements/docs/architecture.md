@@ -21,3 +21,28 @@ MVP uses Cloudflare D1 behind the Worker binding `DB`. SQL is isolated to the se
 ## Offline grants
 
 `POST /v1/offline-grants/issue` signs a compact `base64url(payload).base64url(signature)` grant. Maximum TTL is seven days and is also capped by the subscription expiry. Device identifiers are recorded for activation visibility, not treated as unforgeable hardware identity.
+
+## Delivery
+
+AppFactory owns infrastructure bootstrap for this preset:
+
+```text
+GitHub repository
+      ↓
+D1 database
+      ↓
+wrangler.jsonc receives real database UUID
+      ↓
+Cloudflare Worker bootstrap
+      ↓
+native Workers Builds connection
+      ↓
+npm run d1:migrate:remote
+      ↓
+wrangler deploy
+```
+
+Wrangler remains the migration authority so the service keeps Cloudflare's native `d1_migrations` bookkeeping. AppFactory does not implement a parallel SQL migration tracker.
+
+Runtime product secrets are deliberately outside automatic generation. They are configured after infrastructure bootstrap and remain Worker secrets.
+
