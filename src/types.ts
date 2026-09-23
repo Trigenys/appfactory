@@ -2,6 +2,8 @@ export type DesignRecipe = "corporate" | "luxury" | "saas";
 export type AnimationLevel = "none" | "subtle" | "expressive";
 export type ProjectLanguage = "fr" | "en";
 export type GenerationEngine = "native" | "openpage";
+export type ProjectType = "landing" | "service";
+export type ServicePreset = "entitlements";
 export type Industry =
   | "legal"
   | "technology"
@@ -38,6 +40,8 @@ export interface Env {
   GITHUB_TEMPLATE_REPO?: string;
   GITHUB_COMMIT_AUTHOR_NAME?: string;
   GITHUB_COMMIT_AUTHOR_EMAIL?: string;
+  GITHUB_SERVICE_BLUEPRINT_REPO?: string;
+  GITHUB_SERVICE_BLUEPRINT_REF?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   OPENPAGE_GENERATOR_URL?: string;
@@ -48,6 +52,8 @@ export interface Env {
 
 export interface CreateProjectRequest {
   name: string;
+  projectType?: ProjectType;
+  preset?: ServicePreset;
   slug?: string;
   description?: string;
   private?: boolean;
