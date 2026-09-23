@@ -1,0 +1,58 @@
+name: Provision Entitlement Service Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/provision-entitlement-service-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Provision through AppFactory
+        shell: bash
+        env:
+          APPFACTORY_URL: https://appfactory-api.lawrynnjennifer.workers.dev
+        run: |
+          set -euo pipefail
+
+          payload='{
+            "name": "Trigenys Entitlement Service",
+            "slug": "entitlement-service",
+            "projectType": "service",
+            "preset": "entitlements",
+            "private": true
+          }'
+
+          response_file="$(mktemp)"
+          http_code="$(
+            curl --silent --show-error               --output "$response_file"               --write-out "%{http_code}"               --request POST               --header "Content-Type: application/json"               --data "$payload"               "$APPFACTORY_URL/projects"
+          )"
+
+          echo "AppFactory response:"
+          jq . "$response_file"
+
+          if [[ "$http_code" != "200" && "$http_code" != "201" ]]; then
+            echo "::error::AppFactory returned HTTP $http_code."
+            exit 1
+          fi
+
+          repository="$(jq -r '.repository // empty' "$response_file")"
+          project_type="$(jq -r '.projectType // empty' "$response_file")"
+          preset="$(jq -r '.preset // empty' "$response_file")"
+
+          if [[ "$repository" != "Trigenys/entitlement-service" ]]; then
+            echo "::error::Unexpected repository: $repository"
+            exit 1
+          fi
+
+          if [[ "$project_type" != "service" || "$preset" != "entitlements" ]]; then
+            echo "::error::Unexpected AppFactory service metadata."
+            exit 1
+          fi
+
+          echo "Provisioned $repository successfully."
