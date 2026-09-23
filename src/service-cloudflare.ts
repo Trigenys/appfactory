@@ -317,7 +317,7 @@ async function listD1Databases(env: Env): Promise<D1Database[]> {
       `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/d1/database?per_page=100`
     );
   } catch (error) {
-    permissionError(error, "list D1 databases", ["D1 Read", "D1 Write"]);
+    permissionError(error, "list D1 databases", ["D1 Edit"]);
   }
 }
 
@@ -352,7 +352,7 @@ async function ensureD1Database(
     );
     return { database, created: true };
   } catch (error) {
-    permissionError(error, "create D1 databases", ["D1 Write"]);
+    permissionError(error, "create D1 databases", ["D1 Edit"]);
   }
 }
 
@@ -481,7 +481,7 @@ async function createBootstrapWorker(
       { method: "PUT", body: form }
     );
   } catch (error) {
-    permissionError(error, "create Workers", ["Workers Scripts Write"]);
+    permissionError(error, "create Workers", ["Workers Scripts Edit"]);
   }
 }
 
