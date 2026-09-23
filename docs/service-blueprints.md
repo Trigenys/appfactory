@@ -82,8 +82,8 @@ AppFactory reuses the Workers Builds authentication already attached to `appfact
 
 The AppFactory Cloudflare API token must be able to perform the infrastructure operations it orchestrates:
 
-- D1 Read / D1 Write;
-- Workers Scripts Read / Workers Scripts Write;
+- D1 Edit;
+- Workers Scripts Edit;
 - Workers Builds Configuration Edit;
 - existing Pages permissions remain required for landing projects.
 
