@@ -143,18 +143,20 @@ Each native Pages project is created with:
 
 ## Continuous deployment
 
-AppFactory deploys its production Cloudflare Worker from GitHub Actions; no local clone is required for normal delivery.
+AppFactory uses Cloudflare Workers Builds with the native GitHub integration for production delivery. The existing `appfactory-api` Worker is connected directly to `Trigenys/appfactory`, so pushes to the configured production branch are built and deployed by Cloudflare without duplicating Cloudflare account credentials into GitHub Actions.
 
-The `Deploy AppFactory` workflow runs after the existing `CI` workflow completes successfully on `main`. It checks out the exact tested commit SHA, deploys through Cloudflare's maintained `wrangler-action@v4`, then calls `GET /health` on the deployment URL and requires `status: "ok"`.
+GitHub Actions remains responsible for repository validation (`CI`), while Cloudflare reports its own `Workers Builds: appfactory-api` check run back to the same commit.
 
-Repository Actions secrets required by the deployment workflow:
+Production runtime credentials remain owned by the Worker in Cloudflare:
 
+- `GITHUB_PRIVATE_KEY`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- the other AppFactory runtime variables documented above
 
-Application/runtime secrets such as `GITHUB_PRIVATE_KEY` remain configured on the Worker in Cloudflare. Wrangler deployments do not delete existing Worker secrets, and this repository also keeps dashboard-managed variables with `keep_vars: true`.
+No repository-level `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` is required for normal deployment.
 
-A manual redeploy is available through `workflow_dispatch`, but it cannot bypass validation: the selected ref resolves to a commit SHA and the workflow refuses to deploy it unless that exact SHA already has a successful `CI` run.
+The `npm run deploy` / `wrangler deploy` path is retained only as a break-glass/manual deployment path. Because `wrangler.jsonc` sets `keep_vars: true`, a manual Wrangler deployment preserves dashboard-managed runtime variables.
 
 ## Local development
 
