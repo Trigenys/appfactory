@@ -109,7 +109,7 @@ Required Worker runtime variables/secrets:
 - `GITHUB_INSTALLATION_ID`
 - `GITHUB_PRIVATE_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service provisioning additionally needs D1 Read/Write, Workers Scripts Read/Write and Workers Builds Configuration Edit.
+- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service provisioning additionally needs D1 Edit, Workers Scripts Edit and Workers Builds Configuration Edit.
 
 Optional variables:
 
