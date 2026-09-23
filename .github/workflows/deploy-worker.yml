@@ -5,9 +5,16 @@ on:
     workflows: ["CI"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref or commit to redeploy. The exact commit must already have a successful CI run."
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: read
+  actions: read
   deployments: write
 
 concurrency:
@@ -27,7 +34,33 @@ jobs:
       - name: Checkout tested commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+
+      - name: Resolve deploy commit
+        id: commit
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify successful CI for manual deployment
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api -X GET "repos/${{ github.repository }}/actions/runs" \
+            -f head_sha="$DEPLOY_SHA" \
+            -f per_page=100 \
+            > /tmp/appfactory-runs.json
+
+          if ! jq -e --arg sha "$DEPLOY_SHA" '
+            .workflow_runs
+            | any(.name == "CI" and .head_sha == $sha and .conclusion == "success")
+          ' /tmp/appfactory-runs.json >/dev/null; then
+            echo "::error::No successful CI run exists for commit $DEPLOY_SHA."
+            exit 1
+          fi
 
       - name: Validate deployment credentials
         shell: bash
