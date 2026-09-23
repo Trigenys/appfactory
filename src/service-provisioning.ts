@@ -142,28 +142,29 @@ async function materializeBlueprint(
   preset: ServicePreset,
   serviceName: string
 ): Promise<string> {
-  const owner = env.GITHUB_OWNER || "Trigenys";
+  const targetOwner = env.GITHUB_OWNER || "Trigenys";
+  const sourceOwner = env.GITHUB_SERVICE_BLUEPRINT_OWNER || targetOwner;
   const sourceRepo = env.GITHUB_SERVICE_BLUEPRINT_REPO || "appfactory";
   const source = await githubRequest<GitHubRepository>(
     token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(sourceRepo)}`
+    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}`
   );
   const sourceRef = env.GITHUB_SERVICE_BLUEPRINT_REF || source.default_branch || "main";
   const prefix = `blueprints/${preset}/`;
   const tree = await githubRequest<{ truncated: boolean; tree: GitTreeEntry[] }>(
     token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(sourceRepo)}/git/trees/${encodeURIComponent(sourceRef)}?recursive=1`
+    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/trees/${encodeURIComponent(sourceRef)}?recursive=1`
   );
   if (tree.truncated) throw new Error("AppFactory blueprint tree is too large to materialize safely.");
 
   const sourceBlobs = tree.tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix));
   if (sourceBlobs.length === 0) throw new Error(`No files found for service blueprint ${preset}.`);
 
-  const [targetOwner, targetRepo] = repository.full_name.split("/");
+  const [, targetRepo] = repository.full_name.split("/");
   const targetEntries = await Promise.all(sourceBlobs.map(async (entry) => {
     const sourceBlob = await githubRequest<{ content: string; encoding: string }>(
       token,
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
+      `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
     );
     if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
     const rendered = renderBlueprintText(decodeBase64(sourceBlob.content), {
