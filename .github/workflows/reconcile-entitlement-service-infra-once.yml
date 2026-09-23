@@ -1,0 +1,50 @@
+name: Reconcile Entitlement Service Infrastructure Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reconcile-entitlement-service-infra-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reconcile through AppFactory
+        shell: bash
+        env:
+          APPFACTORY_URL: https://appfactory-api.lawrynnjennifer.workers.dev
+        run: |
+          set -euo pipefail
+
+          payload='{
+            "name": "Trigenys Entitlement Service",
+            "slug": "entitlement-service",
+            "projectType": "service",
+            "preset": "entitlements",
+            "private": true
+          }'
+
+          response_file="$(mktemp)"
+          http_code="$(
+            curl --silent --show-error --max-time 120               --output "$response_file"               --write-out "%{http_code}"               --request POST               --header "Content-Type: application/json"               --data "$payload"               "$APPFACTORY_URL/projects"
+          )"
+
+          echo "AppFactory response:"
+          jq . "$response_file"
+
+          if [[ "$http_code" != "200" && "$http_code" != "201" ]]; then
+            echo "::error::AppFactory returned HTTP $http_code."
+            exit 1
+          fi
+
+          [[ "$(jq -r '.repository // empty' "$response_file")" == "Trigenys/entitlement-service" ]]
+          [[ "$(jq -r '.infrastructure.provider // empty' "$response_file")" == "cloudflare-workers" ]]
+          [[ -n "$(jq -r '.infrastructure.database.id // empty' "$response_file")" ]]
+          [[ -n "$(jq -r '.infrastructure.worker.tag // empty' "$response_file")" ]]
+          [[ -n "$(jq -r '.infrastructure.builds.buildUuid // empty' "$response_file")" ]]
+
+          echo "Entitlement service infrastructure reconciliation accepted."
