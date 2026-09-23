@@ -79,6 +79,12 @@ Example:
 }
 ```
 
+## Service project blueprints
+
+AppFactory can also provision backend service repositories through `projectType: "service"`. The first preset is `entitlements`, which generates a Cloudflare Worker + D1 entitlement service with online checks, short-lived Ed25519 offline grants, CI and AppFactory Project Automation already wired.
+
+Service repositories intentionally bypass the landing renderer and Cloudflare Pages provisioning. See [Service project blueprints](docs/service-blueprints.md) for the request contract, ownership boundaries and idempotency model.
+
 ## Manifest v2
 
 The native engine emits structured generation intent:
