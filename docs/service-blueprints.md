@@ -19,7 +19,7 @@ Content-Type: application/json
 }
 ```
 
-AppFactory creates the repository idempotently and materializes the versioned blueprint from `blueprints/entitlements/`. It does **not** create a Cloudflare Pages project for service repositories.
+AppFactory creates the repository idempotently and materializes the versioned blueprint from `blueprints/entitlements/`. Service repositories do **not** use Cloudflare Pages: AppFactory provisions a D1 database and a Cloudflare Worker, connects the repository to native Workers Builds, applies D1 migrations through Wrangler in the production build, and triggers the first deployment.
 
 The generated repository contains:
 
@@ -38,6 +38,11 @@ The generated repository contains:
 AppFactory
   -> creates/reconciles repository
   -> materializes service blueprint
+  -> creates/reuses D1
+  -> writes the D1 UUID into wrangler.jsonc
+  -> creates/reuses the Worker
+  -> connects native Workers Builds
+  -> triggers the first production build
 
 AppFactory Project Automation
   -> bootstraps/reconciles GitHub Project
@@ -56,7 +61,7 @@ This split is intentional: repository provisioning stays in AppFactory while lif
 
 A repository with a valid `.appfactory/service.json` marker is treated as an existing managed service and a repeated provisioning request becomes a replay.
 
-An unrelated repository with the requested slug is never overwritten. A temporary `.appfactory/service-provisioning.json` marker permits safe recovery if provisioning stopped after repository bootstrap but before the service blueprint commit.
+An unrelated repository with the requested slug is never overwritten. A temporary `.appfactory/service-provisioning.json` marker permits safe recovery if provisioning stopped after repository bootstrap but before the service blueprint commit. Cloudflare provisioning uses `.appfactory/cloudflare-provisioning.json` during reconciliation and writes `.appfactory/cloudflare.json` once the D1 identity is known. Existing Workers without that marker are not silently adopted.
 
 ## Blueprint source
 
@@ -67,3 +72,31 @@ The default source is the current AppFactory repository. Advanced deployments ca
 - `GITHUB_SERVICE_BLUEPRINT_REF`
 
 These settings allow service blueprints to move to a dedicated repository later without changing the public `POST /projects` contract.
+
+
+## Cloudflare service provisioning
+
+The `entitlements` preset uses the existing AppFactory Cloudflare account connection. No Cloudflare token is copied into the generated repository.
+
+AppFactory reuses the Workers Builds authentication already attached to `appfactory-api` when possible. `CLOUDFLARE_BUILD_TOKEN_UUID` can explicitly select an existing build token UUID if discovery is ambiguous; `CLOUDFLARE_BUILD_TOKEN_SOURCE_WORKER` changes the discovery source Worker and defaults to `appfactory-api`.
+
+The AppFactory Cloudflare API token must be able to perform the infrastructure operations it orchestrates:
+
+- D1 Read / D1 Write;
+- Workers Scripts Read / Workers Scripts Write;
+- Workers Builds Configuration Edit;
+- existing Pages permissions remain required for landing projects.
+
+If one of these permissions is missing, AppFactory returns `CLOUDFLARE_TOKEN_PERMISSION_REQUIRED` with the required permission names. Extend the existing token rather than creating a second repository credential.
+
+The production Workers Build runs:
+
+```text
+npm run d1:migrate:remote
+        ↓
+npx wrangler deploy
+```
+
+This deliberately leaves migration bookkeeping to Wrangler and D1's native `d1_migrations` mechanism rather than implementing a second migration engine inside AppFactory.
+
+Product runtime secrets are **not** generated implicitly. `ADMIN_API_KEY`, `SERVICE_API_KEY`, the Ed25519 private key and its public key remain explicit post-provisioning configuration because silently generated credentials would be difficult to recover and rotate safely.
