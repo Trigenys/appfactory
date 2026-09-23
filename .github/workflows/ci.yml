@@ -21,5 +21,7 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Typecheck
+      - name: Typecheck AppFactory
         run: npm run typecheck
+      - name: Typecheck service blueprints
+        run: npm run typecheck:blueprints
