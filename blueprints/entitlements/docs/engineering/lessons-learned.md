@@ -34,3 +34,15 @@ Record meaningful failures and near misses here with context, root cause, resolu
 
 **Guardrail:** infrastructure orchestration may provision dependencies, but schema-version ownership stays with the generated service's native migration tool.
 
+## 2026-09-23 — Existing AppFactory Cloudflare token lacked D1 scope
+
+**Context:** the first end-to-end infrastructure reconciliation reused the Cloudflare API token already held by `appfactory-api`, as required by the reuse-first design.
+
+**Failure:** AppFactory could not list D1 databases and returned `CLOUDFLARE_TOKEN_PERMISSION_REQUIRED`.
+
+**Root cause:** the existing token had been created for the historical Pages provisioning path and did not include D1 access.
+
+**Resolution:** extend the existing AppFactory Cloudflare token with `D1 Read` and `D1 Write`; do not create a duplicate repository or GitHub Actions credential.
+
+**Guardrail:** infrastructure capabilities must probe the existing central credential and return the smallest missing permission set before asking for any credential change.
+
