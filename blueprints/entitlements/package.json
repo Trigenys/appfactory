@@ -1,5 +1,5 @@
 {
-  "name": "@trigenys/appfactory",
+  "name": "@__NPM_SCOPE__/__SERVICE_SLUG__",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "typecheck:blueprints": "tsc -p blueprints/entitlements/tsconfig.json --noEmit"
+    "d1:migrate:local": "wrangler d1 migrations apply __DATABASE_NAME__ --local",
+    "d1:migrate:remote": "wrangler d1 migrations apply __DATABASE_NAME__ --remote"
   },
   "devDependencies": {
     "typescript": "^5.8.0",

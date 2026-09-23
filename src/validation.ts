@@ -4,13 +4,17 @@ import type {
   CreateProjectRequest,
   DesignRecipe,
   GenerationEngine,
-  ProjectLanguage
+  ProjectLanguage,
+  ProjectType,
+  ServicePreset
 } from "./types";
 
 const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service"]);
+const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -52,6 +56,20 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     throw new Error("A valid repository slug could not be produced.");
   }
 
+  const projectType = body.projectType ?? "landing";
+  if (typeof projectType !== "string" || !PROJECT_TYPES.has(projectType as ProjectType)) {
+    throw new Error("projectType must be one of: landing, service.");
+  }
+
+  const preset = body.preset;
+  if (projectType === "service") {
+    if (typeof preset !== "string" || !SERVICE_PRESETS.has(preset as ServicePreset)) {
+      throw new Error("service projects require preset: entitlements.");
+    }
+  } else if (preset !== undefined) {
+    throw new Error("preset is only valid when projectType is service.");
+  }
+
   const language = body.language ?? "en";
   if (typeof language !== "string" || !LANGUAGES.has(language as ProjectLanguage)) {
     throw new Error("language must be one of: fr, en.");
@@ -80,7 +98,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     throw new Error("goal must be one of: leads, bookings, sales, signup, contact, awareness.");
   }
 
-  return {
+  const result: CreateProjectRequest & { slug: string } = {
     name,
     slug,
     description: optionalTrimmedString(body, "description", 300),
@@ -97,4 +115,14 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     primaryCtaLabel: optionalTrimmedString(body, "primaryCtaLabel", 80),
     primaryCtaHref: optionalTrimmedString(body, "primaryCtaHref", 500)
   };
+
+  if (projectType === "service") {
+    return {
+      ...result,
+      projectType: "service",
+      preset: preset as ServicePreset
+    };
+  }
+
+  return result;
 }
