@@ -1,0 +1,15 @@
+{
+  "project": {
+    "owner": "__OWNER__",
+    "title": "__SERVICE_NAME__ Development",
+    "bootstrap": true,
+    "template": "appfactory-product",
+    "linkRepository": true,
+    "importOpenIssues": true,
+    "createBoardView": true
+  },
+  "bootstrap": {
+    "boardViewName": "AppFactory Board",
+    "phases": ["Foundation", "MVP", "Hardening", "Integration", "Production"]
+  }
+}
