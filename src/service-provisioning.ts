@@ -121,11 +121,26 @@ async function getHeadSha(token: string, repository: GitHubRepository): Promise<
   return ref.object.sha;
 }
 
+function renderBlueprintText(
+  content: string,
+  context: { owner: string; name: string; slug: string }
+): string {
+  const databaseName = `${context.slug}-db`;
+  const npmScope = context.owner.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return content
+    .replaceAll("__OWNER__", context.owner)
+    .replaceAll("__SERVICE_NAME__", context.name)
+    .replaceAll("__SERVICE_SLUG__", context.slug)
+    .replaceAll("__DATABASE_NAME__", databaseName)
+    .replaceAll("__NPM_SCOPE__", npmScope);
+}
+
 async function materializeBlueprint(
   token: string,
   env: Env,
   repository: GitHubRepository,
-  preset: ServicePreset
+  preset: ServicePreset,
+  serviceName: string
 ): Promise<string> {
   const owner = env.GITHUB_OWNER || "Trigenys";
   const sourceRepo = env.GITHUB_SERVICE_BLUEPRINT_REPO || "appfactory";
@@ -151,12 +166,17 @@ async function materializeBlueprint(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
     );
     if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
+    const rendered = renderBlueprintText(decodeBase64(sourceBlob.content), {
+      owner: targetOwner,
+      name: serviceName,
+      slug: repository.name
+    });
     const targetBlob = await githubRequest<{ sha: string }>(
       token,
       `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
       {
         method: "POST",
-        body: JSON.stringify({ content: sourceBlob.content.replace(/\s+/g, ""), encoding: "base64" })
+        body: JSON.stringify({ content: encodeBase64(rendered), encoding: "base64" })
       }
     );
     return {
@@ -229,6 +249,6 @@ export async function provisionServiceRepository(
     await writeProvisioningMarker(token, repository, input.preset);
   }
 
-  const commitSha = await materializeBlueprint(token, env, repository, input.preset);
+  const commitSha = await materializeBlueprint(token, env, repository, input.preset, input.name);
   return { repository, commitSha, replay: false };
 }
