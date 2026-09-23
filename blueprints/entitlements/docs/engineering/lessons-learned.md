@@ -24,3 +24,13 @@ Record meaningful failures and near misses here with context, root cause, resolu
 
 **Guardrail:** blueprint workflows must model post-generation configuration as an explicit bootstrap state rather than an unconditional runtime dependency.
 
+## 2026-09-23 — Do not duplicate D1 migration state in AppFactory
+
+**Context:** end-to-end service provisioning needs the first D1 schema applied automatically.
+
+**Risk:** applying SQL directly from AppFactory with a second migration ledger would drift from Wrangler's native `d1_migrations` state and make later developer-operated migrations ambiguous.
+
+**Decision:** Workers Builds runs `npm run d1:migrate:remote` before `wrangler deploy`. AppFactory provisions the database and delivery path, while Wrangler remains the migration authority.
+
+**Guardrail:** infrastructure orchestration may provision dependencies, but schema-version ownership stays with the generated service's native migration tool.
+

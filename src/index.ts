@@ -15,6 +15,7 @@ import {
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
 import { provisionServiceRepository } from "./service-provisioning";
+import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "./service-cloudflare";
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
 import type { Env, GitHubRepository } from "./types";
 import { validateCreateProject } from "./validation";
@@ -318,6 +319,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
         projectType: "service",
         preset: input.preset
       });
+      const infrastructure = await provisionServiceCloudflare(token, env, provisioned.repository);
       return json(
         {
           status: "PROVISIONED",
@@ -326,16 +328,28 @@ async function createProject(request: Request, env: Env): Promise<Response> {
           repository: provisioned.repository.full_name,
           repositoryUrl: provisioned.repository.html_url,
           defaultBranch: provisioned.repository.default_branch,
-          commitSha: provisioned.commitSha,
+          commitSha: infrastructure.configCommitSha,
           idempotency: {
-            replay: provisioned.replay
+            repositoryReplay: provisioned.replay,
+            infrastructureReplay: infrastructure.replay
+          },
+          infrastructure: {
+            provider: "cloudflare-workers",
+            database: infrastructure.database,
+            worker: infrastructure.worker,
+            builds: infrastructure.builds
           },
           nextSteps: {
-            projectAutomation: "Add PROJECT_TOKEN, then run Project automation once with an empty issue number.",
-            database: "Create the D1 database named in the generated README and apply migrations before deployment."
+            projectAutomation: "Reuse an existing project-capable PROJECT_TOKEN if available, then run Project automation once with an empty issue number.",
+            runtimeSecrets: [
+              "ADMIN_API_KEY",
+              "SERVICE_API_KEY",
+              "LICENSE_PRIVATE_KEY_PKCS8_B64",
+              "LICENSE_PUBLIC_KEY_SPKI_B64"
+            ]
           }
         },
-        provisioned.replay ? 200 : 201
+        provisioned.replay && infrastructure.replay ? 200 : 201
       );
     }
 
@@ -345,6 +359,16 @@ async function createProject(request: Request, env: Env): Promise<Response> {
       : await createNativeProject(env, token, input);
   } catch (error) {
     console.error("Project creation failed", error);
+    if (error instanceof ServiceCloudflareProvisioningError) {
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED" ? 502 : 500
+      );
+    }
     const message =
       env.ENVIRONMENT === "production"
         ? "Project creation failed. Check AppFactory logs for details."
@@ -395,7 +419,7 @@ export default {
         milestone: "M3-openpage-end-to-end",
         manifestVersion: 2,
         idempotencyVersion: 1,
-        serviceBlueprintVersion: 1,
+        serviceBlueprintVersion: 2,
         runtimeConfig: config
       });
     }
