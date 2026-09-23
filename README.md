@@ -141,6 +141,21 @@ Each native Pages project is created with:
 - production deployments enabled
 - preview deployments enabled for branches
 
+## Continuous deployment
+
+AppFactory deploys its production Cloudflare Worker from GitHub Actions; no local clone is required for normal delivery.
+
+The `Deploy AppFactory` workflow runs after the existing `CI` workflow completes successfully on `main`. It checks out the exact tested commit SHA, deploys through Cloudflare's maintained `wrangler-action@v4`, then calls `GET /health` on the deployment URL and requires `status: "ok"`.
+
+Repository Actions secrets required by the deployment workflow:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Application/runtime secrets such as `GITHUB_PRIVATE_KEY` remain configured on the Worker in Cloudflare. Wrangler deployments do not delete existing Worker secrets, and this repository also keeps dashboard-managed variables with `keep_vars: true`.
+
+A manual redeploy is available through `workflow_dispatch`, but it cannot bypass validation: the selected ref resolves to a commit SHA and the workflow refuses to deploy it unless that exact SHA already has a successful `CI` run.
+
 ## Local development
 
 ```bash
