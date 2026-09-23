@@ -739,7 +739,7 @@ export async function provisionServiceCloudflare(
     env,
     workerName,
     database.uuid,
-    finalMarker || marker
+    finalMarker
   );
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
