@@ -14,6 +14,7 @@ import {
   saveProjectState
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
+import { provisionServiceRepository } from "./service-provisioning";
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
 import type { Env, GitHubRepository } from "./types";
 import { validateCreateProject } from "./validation";
@@ -308,9 +309,37 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   const { input } = parsed;
 
   try {
-    assertRuntimeConfig(env);
     const token = await getInstallationToken(env);
 
+    if (input.projectType === "service") {
+      if (!input.preset) throw new Error("Service preset is required after validation.");
+      const provisioned = await provisionServiceRepository(token, env, {
+        ...input,
+        projectType: "service",
+        preset: input.preset
+      });
+      return json(
+        {
+          status: "PROVISIONED",
+          projectType: "service",
+          preset: input.preset,
+          repository: provisioned.repository.full_name,
+          repositoryUrl: provisioned.repository.html_url,
+          defaultBranch: provisioned.repository.default_branch,
+          commitSha: provisioned.commitSha,
+          idempotency: {
+            replay: provisioned.replay
+          },
+          nextSteps: {
+            projectAutomation: "Add PROJECT_TOKEN, then run Project automation once with an empty issue number.",
+            database: "Create the D1 database named in the generated README and apply migrations before deployment."
+          }
+        },
+        provisioned.replay ? 200 : 201
+      );
+    }
+
+    assertRuntimeConfig(env);
     return input.engine === "openpage"
       ? await createOpenPageProject(env, token, input)
       : await createNativeProject(env, token, input);
@@ -366,6 +395,7 @@ export default {
         milestone: "M3-openpage-end-to-end",
         manifestVersion: 2,
         idempotencyVersion: 1,
+        serviceBlueprintVersion: 1,
         runtimeConfig: config
       });
     }
