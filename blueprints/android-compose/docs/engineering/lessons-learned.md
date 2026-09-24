@@ -24,3 +24,13 @@ Do not turn this file into a raw error-log dump. The goal is institutional memor
 **Fix:** compile against API 37 while retaining targetSdk 36 until the product deliberately adopts the newer runtime behavior.
 
 **Prevention rule:** whenever the Android dependency baseline is upgraded, the blueprint CI must run AAR metadata validation as part of lint/test/assemble; never infer compileSdk compatibility from targetSdk requirements.
+
+## 2026-09-24 — Generated workflows used deprecated Node 20 action runtimes
+
+**What happened:** CI warned that older GitHub Action majors were being force-run on Node 24 because their bundled Node 20 runtime is deprecated.
+
+**Root cause:** the first blueprint draft reused action majors from older Trigenys workflows.
+
+**Fix:** new Android workflows use the current action majors: checkout v7, setup-node v7 where applicable, setup-java v6, Gradle Actions v6 and upload-artifact v7.
+
+**Prevention rule:** a newly introduced blueprint must pin supported current action majors; deprecation warnings are treated as engineering debt, not harmless log noise.
