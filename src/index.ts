@@ -336,7 +336,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
           quality: {
             architectureReference: "android/nowinandroid",
             visualRegression: "Roborazzi",
-            composeCatalog: true
+            composePreviews: true
           },
           nextSteps: {
             projectAutomation: "Reuse an existing project-capable PROJECT_TOKEN if available, then run Project automation once with an empty issue number.",
