@@ -348,7 +348,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     }
 
     if (input.projectType === "service") {
-      if (!input.preset) throw new Error("Service preset is required after validation.");
+      if (input.preset !== "entitlements") throw new Error("Service preset is required after validation.");
       const provisioned = await provisionServiceRepository(token, env, {
         ...input,
         projectType: "service",
