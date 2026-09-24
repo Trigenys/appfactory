@@ -1,3 +1,4 @@
+import { AuthenticationError, authenticateMutation } from "./auth";
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
@@ -459,6 +460,24 @@ export default {
         mobileBlueprintVersion: 1,
         runtimeConfig: config
       });
+    }
+
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/projects" || url.pathname === "/engines/openpage/generate")
+    ) {
+      try {
+        await authenticateMutation(request, env);
+      } catch (error) {
+        if (error instanceof AuthenticationError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        console.error("Mutation authentication failed", error);
+        return json(
+          { error: "AUTHENTICATION_FAILED", message: "Unable to authenticate request." },
+          401
+        );
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/projects") {

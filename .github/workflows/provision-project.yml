@@ -1,0 +1,174 @@
+name: Provision AppFactory Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Human-readable project name"
+        required: true
+        type: string
+      slug:
+        description: "Repository slug"
+        required: true
+        type: string
+      project_type:
+        description: "Project type"
+        required: true
+        default: mobile
+        type: choice
+        options:
+          - mobile
+          - service
+          - landing
+      private:
+        description: "Create a private repository"
+        required: true
+        default: true
+        type: boolean
+      description:
+        description: "Optional repository description"
+        required: false
+        type: string
+      brief:
+        description: "Optional product/site brief"
+        required: false
+        type: string
+      language:
+        description: "Content language"
+        required: true
+        default: en
+        type: choice
+        options:
+          - en
+          - fr
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: provision-${{ inputs.slug }}
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    env:
+      APPFACTORY_URL: https://appfactory-api.lawrynnjennifer.workers.dev
+      OIDC_AUDIENCE: appfactory-api
+
+    steps:
+      - name: Request GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --silent --show-error --fail \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          token="$(jq -r '.value // empty' <<<"$response")"
+          if [[ -z "$token" ]]; then
+            echo "::error::GitHub did not return an OIDC token."
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Build AppFactory request
+        id: payload
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          payload="$(
+            jq -n \
+              --arg name "${{ inputs.name }}" \
+              --arg slug "${{ inputs.slug }}" \
+              --arg projectType "${{ inputs.project_type }}" \
+              --arg description "${{ inputs.description }}" \
+              --arg brief "${{ inputs.brief }}" \
+              --arg language "${{ inputs.language }}" \
+              --argjson private "${{ inputs.private }}" '
+                {
+                  name: $name,
+                  slug: $slug,
+                  projectType: $projectType,
+                  private: $private,
+                  language: $language
+                }
+                + (if $description != "" then {description: $description} else {} end)
+                + (if $brief != "" then {brief: $brief} else {} end)
+                + (
+                    if $projectType == "mobile" then
+                      {platform: "android", preset: "android-compose"}
+                    elif $projectType == "service" then
+                      {preset: "entitlements"}
+                    else
+                      {}
+                    end
+                  )
+              '
+          )"
+
+          {
+            echo 'json<<PAYLOAD'
+            echo "$payload"
+            echo 'PAYLOAD'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Provision through AppFactory
+        id: provision
+        shell: bash
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          PAYLOAD: ${{ steps.payload.outputs.json }}
+        run: |
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          http_code="$(
+            curl --silent --show-error \
+              --output "$response_file" \
+              --write-out "%{http_code}" \
+              --request POST \
+              --header "Content-Type: application/json" \
+              --header "Authorization: Bearer $OIDC_TOKEN" \
+              --data "$PAYLOAD" \
+              "$APPFACTORY_URL/projects"
+          )"
+
+          echo "AppFactory response:"
+          jq . "$response_file"
+
+          if [[ "$http_code" != "200" && "$http_code" != "201" ]]; then
+            echo "::error::AppFactory returned HTTP $http_code."
+            exit 1
+          fi
+
+          repository="$(jq -r '.repository // empty' "$response_file")"
+          project_type="$(jq -r '.projectType // "landing"' "$response_file")"
+          expected_repository="Trigenys/${{ inputs.slug }}"
+
+          if [[ "$repository" != "$expected_repository" ]]; then
+            echo "::error::Unexpected repository: $repository"
+            exit 1
+          fi
+
+          if [[ "$project_type" != "${{ inputs.project_type }}" ]]; then
+            echo "::error::Unexpected project type: $project_type"
+            exit 1
+          fi
+
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+
+      - name: Publish run summary
+        shell: bash
+        run: |
+          {
+            echo "## AppFactory provisioning"
+            echo
+            echo "- Repository: `${{ steps.provision.outputs.repository }}`"
+            echo "- Type: `${{ inputs.project_type }}`"
+            echo "- Source workflow: `provision-project.yml`"
+            echo "- Authentication: GitHub Actions OIDC"
+          } >> "$GITHUB_STEP_SUMMARY"
