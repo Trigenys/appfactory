@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.trigenys.appfactoryplaceholder"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.trigenys.appfactoryplaceholder"
