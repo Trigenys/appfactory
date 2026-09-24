@@ -186,3 +186,12 @@ See `docs/openpage-engine-poc.md` for the OpenPage audit and the remaining end-t
 AppFactory can provision native Android repositories through `projectType: "mobile"`, `platform: "android"` and `preset: "android-compose"`. The versioned blueprint lives in `blueprints/android-compose/` and includes Compose UI foundations, CI, AppFactory Project Automation and Roborazzi visual-regression support.
 
 Mobile repositories bypass Cloudflare Pages and Workers provisioning. See [Mobile project blueprints](docs/mobile-blueprints.md).
+
+
+## Mutation authentication
+
+Production mutation endpoints are authenticated with GitHub Actions OIDC. Knowing the Worker URL is not sufficient to create repositories or invoke generation.
+
+Use the **Provision AppFactory Project** workflow in `.github/workflows/provision-project.yml`. The Worker validates the short-lived GitHub token signature, audience, repository, main ref and exact workflow identity before accepting `POST /projects` or `POST /engines/openpage/generate`.
+
+See [Mutation authentication](docs/mutation-authentication.md).
