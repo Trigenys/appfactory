@@ -2,8 +2,10 @@ export type DesignRecipe = "corporate" | "luxury" | "saas";
 export type AnimationLevel = "none" | "subtle" | "expressive";
 export type ProjectLanguage = "fr" | "en";
 export type GenerationEngine = "native" | "openpage";
-export type ProjectType = "landing" | "service";
+export type ProjectType = "landing" | "service" | "mobile";
 export type ServicePreset = "entitlements";
+export type MobilePlatform = "android";
+export type MobilePreset = "android-compose";
 export type Industry =
   | "legal"
   | "technology"
@@ -43,6 +45,9 @@ export interface Env {
   GITHUB_SERVICE_BLUEPRINT_OWNER?: string;
   GITHUB_SERVICE_BLUEPRINT_REPO?: string;
   GITHUB_SERVICE_BLUEPRINT_REF?: string;
+  GITHUB_MOBILE_BLUEPRINT_OWNER?: string;
+  GITHUB_MOBILE_BLUEPRINT_REPO?: string;
+  GITHUB_MOBILE_BLUEPRINT_REF?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_BUILD_TOKEN_UUID?: string;
@@ -56,7 +61,8 @@ export interface Env {
 export interface CreateProjectRequest {
   name: string;
   projectType?: ProjectType;
-  preset?: ServicePreset;
+  preset?: ServicePreset | MobilePreset;
+  platform?: MobilePlatform;
   slug?: string;
   description?: string;
   private?: boolean;
