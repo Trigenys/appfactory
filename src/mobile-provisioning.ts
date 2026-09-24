@@ -9,7 +9,7 @@ import type {
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
-const BLUEPRINT_VERSION = 2;
+const BLUEPRINT_VERSION = 3;
 
 class GitHubMobileApiError extends Error {
   constructor(readonly status: number, readonly path: string, detail: string) {
@@ -283,7 +283,7 @@ async function upgradeManagedMobileBlueprint(
   preset: MobilePreset,
   fromVersion: number
 ): Promise<string> {
-  if (fromVersion !== 1 || BLUEPRINT_VERSION !== 2) {
+  if (![1, 2].includes(fromVersion) || BLUEPRINT_VERSION !== 3) {
     throw new Error(
       `No managed mobile blueprint upgrade path from version ${fromVersion} to ${BLUEPRINT_VERSION}.`
     );
@@ -309,7 +309,7 @@ async function upgradeManagedMobileBlueprint(
       ".github/workflows/project-automation.yml",
       ".appfactory/mobile.json"
     ],
-    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v1 to v2`
+    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v${fromVersion} to v3`
   });
 }
 
