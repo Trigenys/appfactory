@@ -161,7 +161,7 @@ jobs:
             echo "## AppFactory provisioning"
             echo
             echo "- Authentication: GitHub Actions OIDC"
-            echo "- Source: `$GITHUB_EVENT_NAME`"
+            printf -- '- Source: `%s`\n' "$GITHUB_EVENT_NAME"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 

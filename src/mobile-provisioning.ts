@@ -224,21 +224,14 @@ async function materializeBlueprint(
       name: appName,
       slug: repository.name
     });
-    const targetBlob = await githubRequest<{ sha: string }>(
-      token,
-      `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
-      {
-        method: "POST",
-        body: JSON.stringify({ content: encodeBase64(rendered), encoding: "base64" })
-      }
-    );
+
     return {
       path: entry.path
         .slice(prefix.length)
         .replaceAll("appfactoryplaceholder", packageSegment(repository.name)),
       mode: entry.mode,
       type: "blob",
-      sha: targetBlob.sha
+      content: rendered
     };
   }));
 
