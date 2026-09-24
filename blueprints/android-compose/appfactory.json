@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "projectType": "mobile",
+  "platform": "android",
+  "preset": "android-compose",
+  "blueprintVersion": 1
+}

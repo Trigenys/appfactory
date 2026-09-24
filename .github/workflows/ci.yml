@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Install dependencies
@@ -25,3 +25,21 @@ jobs:
         run: npm run typecheck
       - name: Typecheck service blueprints
         run: npm run typecheck:blueprints
+
+
+  android-blueprint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.6.0"
+      - name: Validate Android Compose blueprint
+        run: gradle -p blueprints/android-compose :app:lintDebug :app:testDebugUnitTest :app:assembleDebug

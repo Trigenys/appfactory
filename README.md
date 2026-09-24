@@ -179,3 +179,10 @@ Store local secrets in `.dev.vars`; never commit that file.
 External generation engines such as OpenPage plug into AppFactory behind adapters. Their own renderer/export path should remain authoritative wherever possible instead of being reimplemented inside the Worker.
 
 See `docs/openpage-engine-poc.md` for the OpenPage audit and the remaining end-to-end integration step.
+
+
+## Mobile project blueprints
+
+AppFactory can provision native Android repositories through `projectType: "mobile"`, `platform: "android"` and `preset: "android-compose"`. The versioned blueprint lives in `blueprints/android-compose/` and includes Compose UI foundations, CI, AppFactory Project Automation and Roborazzi visual-regression support.
+
+Mobile repositories bypass Cloudflare Pages and Workers provisioning. See [Mobile project blueprints](docs/mobile-blueprints.md).

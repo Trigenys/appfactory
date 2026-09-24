@@ -14,6 +14,7 @@ import {
   saveProjectState
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
+import { provisionMobileRepository } from "./mobile-provisioning";
 import { provisionServiceRepository } from "./service-provisioning";
 import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "./service-cloudflare";
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
@@ -312,8 +313,43 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   try {
     const token = await getInstallationToken(env);
 
+    if (input.projectType === "mobile") {
+      if (input.platform !== "android" || input.preset !== "android-compose") {
+        throw new Error("Mobile platform and preset are required after validation.");
+      }
+      const provisioned = await provisionMobileRepository(token, env, {
+        ...input,
+        projectType: "mobile",
+        platform: input.platform,
+        preset: input.preset
+      });
+      return json(
+        {
+          status: "PROVISIONED",
+          projectType: "mobile",
+          platform: input.platform,
+          preset: input.preset,
+          repository: provisioned.repository.full_name,
+          repositoryUrl: provisioned.repository.html_url,
+          defaultBranch: provisioned.repository.default_branch,
+          commitSha: provisioned.commitSha,
+          idempotency: { repositoryReplay: provisioned.replay },
+          quality: {
+            architectureReference: "android/nowinandroid",
+            visualRegression: "Roborazzi",
+            composePreviews: true
+          },
+          nextSteps: {
+            projectAutomation: "Reuse an existing project-capable PROJECT_TOKEN if available, then run Project automation once with an empty issue number.",
+            productBootstrap: "Add product-specific features behind the generated design-system and feature boundaries."
+          }
+        },
+        provisioned.replay ? 200 : 201
+      );
+    }
+
     if (input.projectType === "service") {
-      if (!input.preset) throw new Error("Service preset is required after validation.");
+      if (input.preset !== "entitlements") throw new Error("Service preset is required after validation.");
       const provisioned = await provisionServiceRepository(token, env, {
         ...input,
         projectType: "service",
@@ -420,6 +456,7 @@ export default {
         manifestVersion: 2,
         idempotencyVersion: 1,
         serviceBlueprintVersion: 2,
+        mobileBlueprintVersion: 1,
         runtimeConfig: config
       });
     }

@@ -4,6 +4,8 @@ import type {
   CreateProjectRequest,
   DesignRecipe,
   GenerationEngine,
+  MobilePlatform,
+  MobilePreset,
   ProjectLanguage,
   ProjectType,
   ServicePreset
@@ -13,8 +15,10 @@ const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
-const PROJECT_TYPES = new Set<ProjectType>(["landing", "service"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile"]);
 const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
+const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
+const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -58,16 +62,27 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
 
   const projectType = body.projectType ?? "landing";
   if (typeof projectType !== "string" || !PROJECT_TYPES.has(projectType as ProjectType)) {
-    throw new Error("projectType must be one of: landing, service.");
+    throw new Error("projectType must be one of: landing, service, mobile.");
   }
 
   const preset = body.preset;
+  const platform = body.platform;
   if (projectType === "service") {
     if (typeof preset !== "string" || !SERVICE_PRESETS.has(preset as ServicePreset)) {
       throw new Error("service projects require preset: entitlements.");
     }
-  } else if (preset !== undefined) {
-    throw new Error("preset is only valid when projectType is service.");
+    if (platform !== undefined) {
+      throw new Error("platform is not valid when projectType is service.");
+    }
+  } else if (projectType === "mobile") {
+    if (typeof platform !== "string" || !MOBILE_PLATFORMS.has(platform as MobilePlatform)) {
+      throw new Error("mobile projects require platform: android.");
+    }
+    if (typeof preset !== "string" || !MOBILE_PRESETS.has(preset as MobilePreset)) {
+      throw new Error("android mobile projects require preset: android-compose.");
+    }
+  } else if (preset !== undefined || platform !== undefined) {
+    throw new Error("preset and platform are only valid for service or mobile projects.");
   }
 
   const language = body.language ?? "en";
@@ -121,6 +136,15 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
       ...result,
       projectType: "service",
       preset: preset as ServicePreset
+    };
+  }
+
+  if (projectType === "mobile") {
+    return {
+      ...result,
+      projectType: "mobile",
+      platform: platform as MobilePlatform,
+      preset: preset as MobilePreset
     };
   }
 
