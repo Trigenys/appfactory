@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "typecheck:blueprints": "tsc -p blueprints/entitlements/tsconfig.json --noEmit",
-    "test:project-blueprints": "node --test test/project-automation-blueprints.test.mjs"
+    "test:project-blueprints": "node --test test/project-automation-blueprints.test.mjs",
+    "test:blueprint-upgrades": "node --test test/managed-blueprint-upgrades.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
