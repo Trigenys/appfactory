@@ -1,0 +1,9 @@
+{
+  "name": "GhostCall",
+  "slug": "ghostcall",
+  "projectType": "mobile",
+  "platform": "android",
+  "preset": "android-compose",
+  "private": true,
+  "description": "Privacy-first Android call screening and personal call firewall by Trigenys."
+}
