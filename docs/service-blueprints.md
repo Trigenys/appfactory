@@ -28,7 +28,7 @@ The generated repository contains:
 - online entitlement checks;
 - Ed25519-signed short-lived offline grants;
 - CI;
-- AppFactory Project Automation configuration and workflow;
+- AppFactory Project Automation configuration and zero-PAT OIDC broker workflow;
 - the shared AppFactory release workflow;
 - RAIDER agent instructions and failure-memory documentation.
 
@@ -56,6 +56,8 @@ Generated entitlement service
 ```
 
 This split is intentional: repository provisioning stays in AppFactory while lifecycle governance stays in the reusable Marketplace Action.
+
+Project Automation does not require a generated repository secret. The workflow exchanges GitHub Actions OIDC through the hosted AppFactory broker and never receives a long-lived `PROJECT_TOKEN`. Private Trigenys repositories use the broker owner's one-time private-repository OAuth authorization; that authorization is account-level broker state, not a credential copied into each service repository.
 
 ## Idempotency and brownfield safety
 
