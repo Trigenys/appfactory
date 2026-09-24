@@ -1,3 +1,4 @@
+import { applyManagedBlueprintUpgrade } from "./managed-blueprint-upgrade";
 import type {
   CreateProjectRequest,
   Env,
@@ -8,7 +9,7 @@ import type {
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
-const BLUEPRINT_VERSION = 1;
+const BLUEPRINT_VERSION = 2;
 
 class GitHubMobileApiError extends Error {
   constructor(readonly status: number, readonly path: string, detail: string) {
@@ -261,19 +262,55 @@ async function materializeBlueprint(
   return commit.sha;
 }
 
-function validMarker(
+function markerMatches(
   marker: MobileMarker | null,
   platform: MobilePlatform,
   preset: MobilePreset
-): boolean {
+): marker is MobileMarker {
   return Boolean(
     marker &&
     marker.schemaVersion === 1 &&
     marker.projectType === "mobile" &&
     marker.platform === platform &&
-    marker.preset === preset &&
-    marker.blueprintVersion === BLUEPRINT_VERSION
+    marker.preset === preset
   );
+}
+
+async function upgradeManagedMobileBlueprint(
+  token: string,
+  env: Env,
+  repository: GitHubRepository,
+  preset: MobilePreset,
+  fromVersion: number
+): Promise<string> {
+  if (fromVersion !== 1 || BLUEPRINT_VERSION !== 2) {
+    throw new Error(
+      `No managed mobile blueprint upgrade path from version ${fromVersion} to ${BLUEPRINT_VERSION}.`
+    );
+  }
+
+  const targetOwner = env.GITHUB_OWNER || "Trigenys";
+  const sourceOwner = env.GITHUB_MOBILE_BLUEPRINT_OWNER || targetOwner;
+  const sourceRepo = env.GITHUB_MOBILE_BLUEPRINT_REPO || "appfactory";
+  const source = await githubRequest<GitHubRepository>(
+    token,
+    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}`
+  );
+  const sourceRef = env.GITHUB_MOBILE_BLUEPRINT_REF || source.default_branch || "main";
+
+  return applyManagedBlueprintUpgrade({
+    token,
+    repository,
+    sourceOwner,
+    sourceRepo,
+    sourceRef,
+    sourcePrefix: `blueprints/${preset}`,
+    managedPaths: [
+      ".github/workflows/project-automation.yml",
+      ".appfactory/mobile.json"
+    ],
+    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v1 to v2`
+  });
 }
 
 export async function provisionMobileRepository(
@@ -285,14 +322,51 @@ export async function provisionMobileRepository(
     platform: MobilePlatform;
     preset: MobilePreset;
   }
-): Promise<{ repository: GitHubRepository; commitSha: string; replay: boolean }> {
+): Promise<{
+  repository: GitHubRepository;
+  commitSha: string;
+  replay: boolean;
+  upgraded: boolean;
+  previousBlueprintVersion?: number;
+  blueprintVersion: number;
+}> {
   const owner = env.GITHUB_OWNER || "Trigenys";
   let repository = await fetchRepository(token, owner, input.slug);
 
   if (repository) {
     const marker = await readJsonFile<MobileMarker>(token, repository, ".appfactory/mobile.json");
-    if (validMarker(marker, input.platform, input.preset)) {
-      return { repository, commitSha: await getHeadSha(token, repository), replay: true };
+    if (markerMatches(marker, input.platform, input.preset)) {
+      if (marker.blueprintVersion === BLUEPRINT_VERSION) {
+        return {
+          repository,
+          commitSha: await getHeadSha(token, repository),
+          replay: true,
+          upgraded: false,
+          blueprintVersion: BLUEPRINT_VERSION
+        };
+      }
+      if (marker.blueprintVersion > BLUEPRINT_VERSION) {
+        throw new Error(
+          `Repository ${repository.full_name} uses future mobile blueprint version ${marker.blueprintVersion}; refusing to downgrade to ${BLUEPRINT_VERSION}.`
+        );
+      }
+
+      const previousBlueprintVersion = marker.blueprintVersion;
+      const commitSha = await upgradeManagedMobileBlueprint(
+        token,
+        env,
+        repository,
+        input.preset,
+        previousBlueprintVersion
+      );
+      return {
+        repository,
+        commitSha,
+        replay: false,
+        upgraded: true,
+        previousBlueprintVersion,
+        blueprintVersion: BLUEPRINT_VERSION
+      };
     }
 
     const provisioning = await readJsonFile<MobileMarker & { complete?: boolean }>(
@@ -316,5 +390,11 @@ export async function provisionMobileRepository(
   }
 
   const commitSha = await materializeBlueprint(token, env, repository, input.preset, input.name);
-  return { repository, commitSha, replay: false };
+  return {
+    repository,
+    commitSha,
+    replay: false,
+    upgraded: false,
+    blueprintVersion: BLUEPRINT_VERSION
+  };
 }
