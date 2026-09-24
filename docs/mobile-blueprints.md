@@ -22,6 +22,8 @@ The repository is created directly in the configured GitHub organization and the
 
 The generated baseline includes Compose UI foundations, CI, AppFactory Project Automation, RAIDER engineering instructions and Roborazzi visual-regression support.
 
+Project Automation is zero-PAT by default. Generated repositories call the reusable AppFactory workflow with GitHub Actions OIDC and the hosted Project broker; no `PROJECT_TOKEN`, OAuth client secret or encryption key is copied into the repository. Private Trigenys repositories rely on the broker owner's one-time private-repository OAuth authorization rather than per-repository credentials.
+
 `android/nowinandroid` is an architectural reference, not a runtime dependency. `android/compose-samples` is a pattern reference. Roborazzi is the deliberate visual-regression dependency embedded in generated repositories.
 
 A valid `.appfactory/mobile.json` marker makes repeated provisioning idempotent. An unrelated repository with the same slug is never overwritten.
