@@ -6,5 +6,6 @@
   "preset": "android-compose",
   "private": true,
   "description": "Privacy-first Android call screening and personal call firewall by Trigenys.",
-  "language": "en"
+  "language": "en",
+  "audience": "Android users who want granular control over incoming calls"
 }
