@@ -1,9 +1,10 @@
 import { createRepositoryFromTemplate } from "./github";
+import { applyManagedBlueprintUpgrade } from "./managed-blueprint-upgrade";
 import type { CreateProjectRequest, Env, GitHubRepository, ServicePreset } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
-const BLUEPRINT_VERSION = 1;
+const BLUEPRINT_VERSION = 2;
 
 class GitHubServiceApiError extends Error {
   constructor(readonly status: number, readonly path: string, detail: string) {
@@ -214,29 +215,106 @@ async function materializeBlueprint(
   return commit.sha;
 }
 
-function validMarker(marker: ServiceMarker | null, preset: ServicePreset): boolean {
+function markerMatches(
+  marker: ServiceMarker | null,
+  preset: ServicePreset
+): marker is ServiceMarker {
   return Boolean(
     marker &&
     marker.schemaVersion === 1 &&
     marker.projectType === "service" &&
-    marker.preset === preset &&
-    marker.blueprintVersion === BLUEPRINT_VERSION
+    marker.preset === preset
   );
+}
+
+async function upgradeManagedServiceBlueprint(
+  token: string,
+  env: Env,
+  repository: GitHubRepository,
+  preset: ServicePreset,
+  fromVersion: number
+): Promise<string> {
+  if (fromVersion !== 1 || BLUEPRINT_VERSION !== 2) {
+    throw new Error(
+      `No managed service blueprint upgrade path from version ${fromVersion} to ${BLUEPRINT_VERSION}.`
+    );
+  }
+
+  const targetOwner = env.GITHUB_OWNER || "Trigenys";
+  const sourceOwner = env.GITHUB_SERVICE_BLUEPRINT_OWNER || targetOwner;
+  const sourceRepo = env.GITHUB_SERVICE_BLUEPRINT_REPO || "appfactory";
+  const source = await githubRequest<GitHubRepository>(
+    token,
+    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}`
+  );
+  const sourceRef = env.GITHUB_SERVICE_BLUEPRINT_REF || source.default_branch || "main";
+
+  return applyManagedBlueprintUpgrade({
+    token,
+    repository,
+    sourceOwner,
+    sourceRepo,
+    sourceRef,
+    sourcePrefix: `blueprints/${preset}`,
+    managedPaths: [
+      ".github/workflows/project-automation.yml",
+      ".appfactory/service.json"
+    ],
+    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v1 to v2`
+  });
 }
 
 export async function provisionServiceRepository(
   token: string,
   env: Env,
   input: CreateProjectRequest & { slug: string; projectType: "service"; preset: ServicePreset }
-): Promise<{ repository: GitHubRepository; commitSha: string; replay: boolean }> {
+): Promise<{
+  repository: GitHubRepository;
+  commitSha: string;
+  replay: boolean;
+  upgraded: boolean;
+  previousBlueprintVersion?: number;
+  blueprintVersion: number;
+}> {
   const owner = env.GITHUB_OWNER || "Trigenys";
   let repository = await fetchRepository(token, owner, input.slug);
 
   if (repository) {
     const marker = await readJsonFile<ServiceMarker>(token, repository, ".appfactory/service.json");
-    if (validMarker(marker, input.preset)) {
-      return { repository, commitSha: await getHeadSha(token, repository), replay: true };
+    if (markerMatches(marker, input.preset)) {
+      if (marker.blueprintVersion === BLUEPRINT_VERSION) {
+        return {
+          repository,
+          commitSha: await getHeadSha(token, repository),
+          replay: true,
+          upgraded: false,
+          blueprintVersion: BLUEPRINT_VERSION
+        };
+      }
+      if (marker.blueprintVersion > BLUEPRINT_VERSION) {
+        throw new Error(
+          `Repository ${repository.full_name} uses future service blueprint version ${marker.blueprintVersion}; refusing to downgrade to ${BLUEPRINT_VERSION}.`
+        );
+      }
+
+      const previousBlueprintVersion = marker.blueprintVersion;
+      const commitSha = await upgradeManagedServiceBlueprint(
+        token,
+        env,
+        repository,
+        input.preset,
+        previousBlueprintVersion
+      );
+      return {
+        repository,
+        commitSha,
+        replay: false,
+        upgraded: true,
+        previousBlueprintVersion,
+        blueprintVersion: BLUEPRINT_VERSION
+      };
     }
+
     const provisioning = await readJsonFile<ServiceMarker & { complete?: boolean }>(
       token,
       repository,
@@ -251,5 +329,11 @@ export async function provisionServiceRepository(
   }
 
   const commitSha = await materializeBlueprint(token, env, repository, input.preset, input.name);
-  return { repository, commitSha, replay: false };
+  return {
+    repository,
+    commitSha,
+    replay: false,
+    upgraded: false,
+    blueprintVersion: BLUEPRINT_VERSION
+  };
 }

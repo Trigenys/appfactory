@@ -102,3 +102,10 @@ npx wrangler deploy
 This deliberately leaves migration bookkeeping to Wrangler and D1's native `d1_migrations` mechanism rather than implementing a second migration engine inside AppFactory.
 
 Product runtime secrets are **not** generated implicitly. `ADMIN_API_KEY`, `SERVICE_API_KEY`, the Ed25519 private key and its public key remain explicit post-provisioning configuration because silently generated credentials would be difficult to recover and rotate safely.
+
+
+## Managed blueprint upgrades
+
+Service repositories carry a versioned `.appfactory/service.json` marker. Replays on the current version remain no-op/idempotent.
+
+A reviewed migration updates only an explicit AppFactory-owned file allowlist using the existing repository tree as its base. Version 1 → 2 updates Project Automation and the service marker only; application code, infrastructure configuration and product-specific changes are preserved. Future blueprint versions fail closed instead of being downgraded.

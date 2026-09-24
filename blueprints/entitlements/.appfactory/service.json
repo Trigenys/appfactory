@@ -2,5 +2,5 @@
   "schemaVersion": 1,
   "projectType": "service",
   "preset": "entitlements",
-  "blueprintVersion": 1
+  "blueprintVersion": 2
 }
