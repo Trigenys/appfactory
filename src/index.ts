@@ -14,6 +14,7 @@ import {
   saveProjectState
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
+import { provisionMobileRepository } from "./mobile-provisioning";
 import { provisionServiceRepository } from "./service-provisioning";
 import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "./service-cloudflare";
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
@@ -455,6 +456,7 @@ export default {
         manifestVersion: 2,
         idempotencyVersion: 1,
         serviceBlueprintVersion: 2,
+        mobileBlueprintVersion: 1,
         runtimeConfig: config
       });
     }
