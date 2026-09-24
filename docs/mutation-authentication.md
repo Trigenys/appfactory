@@ -32,3 +32,10 @@ No long-lived AppFactory API key is stored in GitHub or Cloudflare.
 ## Development
 
 Authentication is bypassed only when the Worker explicitly runs with `ENVIRONMENT=development`. Production and unspecified environments enforce OIDC.
+
+
+## Declarative provisioning requests
+
+For an auditable GitOps path, add or modify one JSON request under `.appfactory/requests/` and merge it to `main`. The same OIDC-protected workflow detects changed request files and provisions them through AppFactory.
+
+The request file is an immutable-friendly audit record; AppFactory's own brownfield/idempotency checks remain authoritative and prevent unrelated repositories from being overwritten.
