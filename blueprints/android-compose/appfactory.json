@@ -3,6 +3,5 @@
   "projectType": "mobile",
   "platform": "android",
   "preset": "android-compose",
-  "blueprintVersion": 1,
-  "name": "__APP_NAME__"
-}
+  "blueprintVersion": 1
+}\n
