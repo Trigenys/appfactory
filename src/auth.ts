@@ -46,6 +46,12 @@ function decodeBase64Url(value: string): Uint8Array {
   return bytes;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.length);
+  copy.set(bytes);
+  return copy.buffer as ArrayBuffer;
+}
+
 function decodeJson<T>(segment: string): T {
   const bytes = decodeBase64Url(segment);
   return JSON.parse(new TextDecoder().decode(bytes)) as T;
@@ -122,8 +128,8 @@ async function verifyWithKey(
   const valid = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     key,
-    decodeBase64Url(signatureSegment),
-    new TextEncoder().encode(signingInput)
+    toArrayBuffer(decodeBase64Url(signatureSegment)),
+    toArrayBuffer(new TextEncoder().encode(signingInput))
   );
   if (!valid) {
     throw new AuthenticationError(401, "OIDC_SIGNATURE_INVALID", "GitHub OIDC signature is invalid.");
