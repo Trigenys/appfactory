@@ -4,7 +4,7 @@ import type { CreateProjectRequest, Env, GitHubRepository, ServicePreset } from 
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
-const BLUEPRINT_VERSION = 2;
+const BLUEPRINT_VERSION = 3;
 
 class GitHubServiceApiError extends Error {
   constructor(readonly status: number, readonly path: string, detail: string) {
@@ -234,7 +234,7 @@ async function upgradeManagedServiceBlueprint(
   preset: ServicePreset,
   fromVersion: number
 ): Promise<string> {
-  if (fromVersion !== 1 || BLUEPRINT_VERSION !== 2) {
+  if (![1, 2].includes(fromVersion) || BLUEPRINT_VERSION !== 3) {
     throw new Error(
       `No managed service blueprint upgrade path from version ${fromVersion} to ${BLUEPRINT_VERSION}.`
     );
@@ -260,7 +260,7 @@ async function upgradeManagedServiceBlueprint(
       ".github/workflows/project-automation.yml",
       ".appfactory/service.json"
     ],
-    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v1 to v2`
+    commitMessage: `chore(appfactory): upgrade ${preset} blueprint v${fromVersion} to v3`
   });
 }
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const root = new URL('../', import.meta.url);
-const runtime = '7ff298087308d7ddcc8e507d8eb9adb56c2e2158';
+const runtime = '14d51168311c25f41d89df370c5e2ad2d5f42e83';
 const broker = 'https://appfactory-project-token-broker.lawrynnjennifer.workers.dev/v1/github/user-token';
 const blueprintPaths = [
   'blueprints/android-compose/.github/workflows/project-automation.yml',
@@ -21,7 +21,7 @@ for (const path of blueprintPaths) {
       workflow,
       new RegExp(`reusable-project-automation\\.yml@${runtime}`)
     );
-    assert.match(workflow, /authentication: github-app-user/);
+    assert.match(workflow, /authentication: broker-user/);
     assert.ok(workflow.includes(`broker_url: ${broker}`));
     assert.ok(workflow.includes(`appfactory_ref: ${runtime}`));
     assert.match(workflow, /config_path: \.github\/project-config\.json/);

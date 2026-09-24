@@ -35,4 +35,4 @@ Release signing keys and Play Console credentials are intentionally not created 
 
 AppFactory-managed mobile repositories carry a versioned `.appfactory/mobile.json` marker. A request replay is idempotent when the repository is already on the current blueprint version.
 
-When a reviewed migration exists, AppFactory upgrades only the files explicitly owned by that migration and commits them on top of the current repository tree. Version 1 → 2 updates only Project Automation and the mobile marker so product code remains untouched. Repositories with a future marker version are never downgraded.
+When a reviewed migration exists, AppFactory upgrades only the files explicitly owned by that migration and commits them on top of the current repository tree. Versions 1 or 2 → 3 update only Project Automation and the mobile marker so product code remains untouched. Version 3 promotes the reviewed immutable Project runtime `14d51168311c25f41d89df370c5e2ad2d5f42e83`. Repositories with a future marker version are never downgraded.

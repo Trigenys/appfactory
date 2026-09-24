@@ -470,8 +470,8 @@ export default {
         milestone: "M3-openpage-end-to-end",
         manifestVersion: 2,
         idempotencyVersion: 1,
-        serviceBlueprintVersion: 2,
-        mobileBlueprintVersion: 2,
+        serviceBlueprintVersion: 3,
+        mobileBlueprintVersion: 3,
         runtimeConfig: config
       });
     }
