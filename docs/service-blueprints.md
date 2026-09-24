@@ -108,4 +108,4 @@ Product runtime secrets are **not** generated implicitly. `ADMIN_API_KEY`, `SERV
 
 Service repositories carry a versioned `.appfactory/service.json` marker. Replays on the current version remain no-op/idempotent.
 
-A reviewed migration updates only an explicit AppFactory-owned file allowlist using the existing repository tree as its base. Version 1 → 2 updates Project Automation and the service marker only; application code, infrastructure configuration and product-specific changes are preserved. Future blueprint versions fail closed instead of being downgraded.
+A reviewed migration updates only an explicit AppFactory-owned file allowlist using the existing repository tree as its base. Versions 1 or 2 → 3 update Project Automation and the service marker only; application code, infrastructure configuration and product-specific changes are preserved. Version 3 promotes the reviewed immutable Project runtime `14d51168311c25f41d89df370c5e2ad2d5f42e83`. Future blueprint versions fail closed instead of being downgraded.
