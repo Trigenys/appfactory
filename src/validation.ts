@@ -4,6 +4,8 @@ import type {
   CreateProjectRequest,
   DesignRecipe,
   GenerationEngine,
+  MobilePlatform,
+  MobilePreset,
   ProjectLanguage,
   ProjectType,
   ServicePreset
@@ -13,8 +15,10 @@ const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
-const PROJECT_TYPES = new Set<ProjectType>(["landing", "service"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile"]);
 const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
+const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
+const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
