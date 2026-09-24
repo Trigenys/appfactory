@@ -334,14 +334,22 @@ async function createProject(request: Request, env: Env): Promise<Response> {
           repositoryUrl: provisioned.repository.html_url,
           defaultBranch: provisioned.repository.default_branch,
           commitSha: provisioned.commitSha,
-          idempotency: { repositoryReplay: provisioned.replay },
+          idempotency: {
+            repositoryReplay: provisioned.replay,
+            blueprintUpgrade: provisioned.upgraded
+              ? {
+                  from: provisioned.previousBlueprintVersion,
+                  to: provisioned.blueprintVersion
+                }
+              : null
+          },
           quality: {
             architectureReference: "android/nowinandroid",
             visualRegression: "Roborazzi",
             composePreviews: true
           },
           nextSteps: {
-            projectAutomation: "Reuse an existing project-capable PROJECT_TOKEN if available, then run Project automation once with an empty issue number.",
+            projectAutomation: "Project Automation is preconfigured through GitHub Actions OIDC and the AppFactory broker; no repository PROJECT_TOKEN is required.",
             productBootstrap: "Add product-specific features behind the generated design-system and feature boundaries."
           }
         },
@@ -368,7 +376,13 @@ async function createProject(request: Request, env: Env): Promise<Response> {
           commitSha: infrastructure.configCommitSha,
           idempotency: {
             repositoryReplay: provisioned.replay,
-            infrastructureReplay: infrastructure.replay
+            infrastructureReplay: infrastructure.replay,
+            blueprintUpgrade: provisioned.upgraded
+              ? {
+                  from: provisioned.previousBlueprintVersion,
+                  to: provisioned.blueprintVersion
+                }
+              : null
           },
           infrastructure: {
             provider: "cloudflare-workers",
@@ -377,7 +391,7 @@ async function createProject(request: Request, env: Env): Promise<Response> {
             builds: infrastructure.builds
           },
           nextSteps: {
-            projectAutomation: "Reuse an existing project-capable PROJECT_TOKEN if available, then run Project automation once with an empty issue number.",
+            projectAutomation: "Project Automation is preconfigured through GitHub Actions OIDC and the AppFactory broker; no repository PROJECT_TOKEN is required.",
             runtimeSecrets: [
               "ADMIN_API_KEY",
               "SERVICE_API_KEY",
@@ -457,7 +471,7 @@ export default {
         manifestVersion: 2,
         idempotencyVersion: 1,
         serviceBlueprintVersion: 2,
-        mobileBlueprintVersion: 1,
+        mobileBlueprintVersion: 2,
         runtimeConfig: config
       });
     }
