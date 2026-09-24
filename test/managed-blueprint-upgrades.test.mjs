@@ -25,22 +25,22 @@ test('managed upgrades preserve the existing repository tree and history', () =>
   assert.match(helper, /Managed blueprint upgrade must declare at least one file/);
 });
 
-test('mobile v1 to v3 upgrade owns only Project automation and its marker', () => {
+test('mobile v1/v2 to v3 upgrade owns only Project automation and its marker', () => {
   const source = read('src/mobile-provisioning.ts');
 
   assert.match(source, /const BLUEPRINT_VERSION = 3/);
-  assert.match(source, /fromVersion !== 1 \|\| BLUEPRINT_VERSION !== 2/);
+  assert.match(source, /!\[1, 2\]\.includes\(fromVersion\) \|\| BLUEPRINT_VERSION !== 3/);
   assert.match(source, /"\.github\/workflows\/project-automation\.yml"/);
   assert.match(source, /"\.appfactory\/mobile\.json"/);
   assert.match(source, /refusing to downgrade/);
   assert.match(source, /upgraded: true/);
 });
 
-test('service v1 to v3 upgrade owns only Project automation and its marker', () => {
+test('service v1/v2 to v3 upgrade owns only Project automation and its marker', () => {
   const source = read('src/service-provisioning.ts');
 
   assert.match(source, /const BLUEPRINT_VERSION = 3/);
-  assert.match(source, /fromVersion !== 1 \|\| BLUEPRINT_VERSION !== 2/);
+  assert.match(source, /!\[1, 2\]\.includes\(fromVersion\) \|\| BLUEPRINT_VERSION !== 3/);
   assert.match(source, /"\.github\/workflows\/project-automation\.yml"/);
   assert.match(source, /"\.appfactory\/service\.json"/);
   assert.match(source, /refusing to downgrade/);
