@@ -160,12 +160,27 @@ function packageSegment(slug: string): string {
   return /^[a-z]/.test(normalized) ? normalized : `app${normalized}`;
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function escapeJsonString(value: string): string {
+  return JSON.stringify(value).slice(1, -1);
+}
+
 function renderBlueprintText(
   content: string,
   context: { owner: string; name: string; slug: string }
 ): string {
   return content
     .replaceAll("__OWNER__", context.owner)
+    .replaceAll("__APP_NAME_XML__", escapeXml(context.name))
+    .replaceAll("__APP_NAME_JSON__", escapeJsonString(context.name))
     .replaceAll("__APP_NAME__", context.name)
     .replaceAll("__APP_SLUG__", context.slug)
     .replaceAll("appfactoryplaceholder", packageSegment(context.slug));
@@ -218,7 +233,9 @@ async function materializeBlueprint(
       }
     );
     return {
-      path: entry.path.slice(prefix.length),
+      path: entry.path
+        .slice(prefix.length)
+        .replaceAll("appfactoryplaceholder", packageSegment(repository.name)),
       mode: entry.mode,
       type: "blob",
       sha: targetBlob.sha
