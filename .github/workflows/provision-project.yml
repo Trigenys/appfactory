@@ -208,6 +208,6 @@ jobs:
             fi
 
             {
-              echo "- `$repository` — `$project_type`"
+              printf -- '- `%s` — `%s`\n' "$repository" "$project_type"
             } >> "$GITHUB_STEP_SUMMARY"
           done < "$REQUESTS_FILE"
