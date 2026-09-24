@@ -27,6 +27,8 @@ jobs:
         run: npm run typecheck:blueprints
       - name: Validate zero-PAT Project blueprints
         run: npm run test:project-blueprints
+      - name: Validate managed blueprint upgrades
+        run: npm run test:blueprint-upgrades
 
 
   android-blueprint:
