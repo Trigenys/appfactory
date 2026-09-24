@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.trigenys.appfactoryplaceholder.R
 import com.trigenys.appfactoryplaceholder.ui.theme.TrigenysTheme
 
 @Composable
@@ -32,7 +33,7 @@ private fun AppHome(innerPadding: PaddingValues) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "__APP_NAME__",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium
         )
         Text(
