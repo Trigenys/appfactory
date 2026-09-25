@@ -2,10 +2,12 @@ export type DesignRecipe = "corporate" | "luxury" | "saas";
 export type AnimationLevel = "none" | "subtle" | "expressive";
 export type ProjectLanguage = "fr" | "en";
 export type GenerationEngine = "native" | "openpage";
-export type ProjectType = "landing" | "service" | "mobile";
+export type ProjectType = "landing" | "service" | "mobile" | "desktop";
 export type ServicePreset = "entitlements";
 export type MobilePlatform = "android";
 export type MobilePreset = "android-compose";
+export type DesktopPlatform = "windows";
+export type DesktopPreset = "tauri-react";
 export type Industry =
   | "legal"
   | "technology"
@@ -48,6 +50,9 @@ export interface Env {
   GITHUB_MOBILE_BLUEPRINT_OWNER?: string;
   GITHUB_MOBILE_BLUEPRINT_REPO?: string;
   GITHUB_MOBILE_BLUEPRINT_REF?: string;
+  GITHUB_DESKTOP_BLUEPRINT_OWNER?: string;
+  GITHUB_DESKTOP_BLUEPRINT_REPO?: string;
+  GITHUB_DESKTOP_BLUEPRINT_REF?: string;
   GITHUB_OIDC_AUDIENCE?: string;
   GITHUB_OIDC_REPOSITORY?: string;
   GITHUB_OIDC_REF?: string;
@@ -65,8 +70,8 @@ export interface Env {
 export interface CreateProjectRequest {
   name: string;
   projectType?: ProjectType;
-  preset?: ServicePreset | MobilePreset;
-  platform?: MobilePlatform;
+  preset?: ServicePreset | MobilePreset | DesktopPreset;
+  platform?: MobilePlatform | DesktopPlatform;
   slug?: string;
   description?: string;
   private?: boolean;
