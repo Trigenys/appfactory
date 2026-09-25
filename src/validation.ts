@@ -2,6 +2,8 @@ import type {
   AnimationLevel,
   ConversionGoal,
   CreateProjectRequest,
+  DesktopPlatform,
+  DesktopPreset,
   DesignRecipe,
   GenerationEngine,
   MobilePlatform,
@@ -15,10 +17,12 @@ const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
-const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop"]);
 const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
 const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
 const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
+const DESKTOP_PLATFORMS = new Set<DesktopPlatform>(["windows"]);
+const DESKTOP_PRESETS = new Set<DesktopPreset>(["tauri-react"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -62,7 +66,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
 
   const projectType = body.projectType ?? "landing";
   if (typeof projectType !== "string" || !PROJECT_TYPES.has(projectType as ProjectType)) {
-    throw new Error("projectType must be one of: landing, service, mobile.");
+    throw new Error("projectType must be one of: landing, service, mobile, desktop.");
   }
 
   const preset = body.preset;
@@ -81,8 +85,15 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     if (typeof preset !== "string" || !MOBILE_PRESETS.has(preset as MobilePreset)) {
       throw new Error("android mobile projects require preset: android-compose.");
     }
+  } else if (projectType === "desktop") {
+    if (typeof platform !== "string" || !DESKTOP_PLATFORMS.has(platform as DesktopPlatform)) {
+      throw new Error("desktop projects require platform: windows.");
+    }
+    if (typeof preset !== "string" || !DESKTOP_PRESETS.has(preset as DesktopPreset)) {
+      throw new Error("windows desktop projects require preset: tauri-react.");
+    }
   } else if (preset !== undefined || platform !== undefined) {
-    throw new Error("preset and platform are only valid for service or mobile projects.");
+    throw new Error("preset and platform are only valid for service, mobile or desktop projects.");
   }
 
   const language = body.language ?? "en";
@@ -145,6 +156,15 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
       projectType: "mobile",
       platform: platform as MobilePlatform,
       preset: preset as MobilePreset
+    };
+  }
+
+  if (projectType === "desktop") {
+    return {
+      ...result,
+      projectType: "desktop",
+      platform: platform as DesktopPlatform,
+      preset: preset as DesktopPreset
     };
   }
 
