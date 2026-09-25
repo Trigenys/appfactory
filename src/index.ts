@@ -15,6 +15,7 @@ import {
   saveProjectState
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
+import { provisionDesktopRepository } from "./desktop-provisioning";
 import { provisionMobileRepository } from "./mobile-provisioning";
 import { provisionServiceRepository } from "./service-provisioning";
 import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "./service-cloudflare";
@@ -314,6 +315,44 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   try {
     const token = await getInstallationToken(env);
 
+    if (input.projectType === "desktop") {
+      if (input.platform !== "windows" || input.preset !== "tauri-react") {
+        throw new Error("Desktop platform and preset are required after validation.");
+      }
+      const provisioned = await provisionDesktopRepository(token, env, {
+        ...input,
+        projectType: "desktop",
+        platform: input.platform,
+        preset: input.preset
+      });
+      return json(
+        {
+          status: "PROVISIONED",
+          projectType: "desktop",
+          platform: input.platform,
+          preset: input.preset,
+          repository: provisioned.repository.full_name,
+          repositoryUrl: provisioned.repository.html_url,
+          defaultBranch: provisioned.repository.default_branch,
+          commitSha: provisioned.commitSha,
+          idempotency: {
+            repositoryReplay: provisioned.replay
+          },
+          quality: {
+            shell: "Tauri 2",
+            frontend: "React + TypeScript + Vite",
+            nativeBoundary: "Rust",
+            filesystemPolicy: "privileged access stays behind narrow Rust commands"
+          },
+          nextSteps: {
+            projectAutomation: "Project Automation is preconfigured through GitHub Actions OIDC and the AppFactory broker; no repository PROJECT_TOKEN is required.",
+            productBootstrap: "Implement product-specific scanner, registry and health-engine features behind the generated native boundary."
+          }
+        },
+        provisioned.replay ? 200 : 201
+      );
+    }
+
     if (input.projectType === "mobile") {
       if (input.platform !== "android" || input.preset !== "android-compose") {
         throw new Error("Mobile platform and preset are required after validation.");
@@ -472,6 +511,7 @@ export default {
         idempotencyVersion: 1,
         serviceBlueprintVersion: 3,
         mobileBlueprintVersion: 3,
+        desktopBlueprintVersion: 1,
         runtimeConfig: config
       });
     }
