@@ -1,0 +1,9 @@
+{
+  "name": "Product Identity",
+  "slug": "product-identity",
+  "projectType": "landing",
+  "private": true,
+  "language": "en",
+  "description": "Digital product identity, serialization, authenticity verification and warranty registration for physical-product brands.",
+  "brief": "Product Identity by Trigenys gives every physical product unit a unique digital identity. Brands can generate serial numbers and QR codes, let customers verify authenticity and register ownership/warranty, and unify product identity across Shopify, Amazon, retail and distributor channels. Initial target: DTC hardware and durable-goods brands selling serialized, warrantied or counterfeit-sensitive products. The product must be self-service, international-first, privacy-aware, secure by default, and designed for later Shopify App Store distribution."
+}
