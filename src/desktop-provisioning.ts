@@ -202,6 +202,8 @@ async function materializeBlueprint(
   if (sourceBlobs.length === 0) throw new Error(`No files found for desktop blueprint ${preset}.`);
 
   const [, targetRepo] = repository.full_name.split("/");
+  const binaryExtensions = [".ico", ".icns", ".png", ".jpg", ".jpeg", ".webp"];
+
   const targetEntries = await Promise.all(sourceBlobs.map(async (entry) => {
     const sourceBlob = await githubRequest<{ content: string; encoding: string }>(
       token,
@@ -209,17 +211,29 @@ async function materializeBlueprint(
     );
     if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
 
-    const rendered = renderBlueprintText(decodeBase64(sourceBlob.content), {
-      owner: targetOwner,
-      name: appName,
-      slug: repository.name
-    });
+    const isBinary = binaryExtensions.some((extension) => entry.path.toLowerCase().endsWith(extension));
+    const content = isBinary
+      ? sourceBlob.content.replace(/\\s+/g, "")
+      : encodeBase64(renderBlueprintText(decodeBase64(sourceBlob.content), {
+          owner: targetOwner,
+          name: appName,
+          slug: repository.name
+        }));
+
+    const targetBlob = await githubRequest<{ sha: string }>(
+      token,
+      `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
+      {
+        method: "POST",
+        body: JSON.stringify({ content, encoding: "base64" })
+      }
+    );
 
     return {
       path: entry.path.slice(prefix.length),
       mode: entry.mode,
       type: "blob",
-      content: rendered
+      sha: targetBlob.sha
     };
   }));
 
