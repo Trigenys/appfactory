@@ -1,0 +1,11 @@
+{
+  "name": "Sims Mod Health",
+  "slug": "sims-mod-health",
+  "projectType": "desktop",
+  "platform": "windows",
+  "preset": "tauri-react",
+  "private": true,
+  "description": "Offline-first desktop health manager for The Sims 4 mods and custom content.",
+  "brief": "Scan a local The Sims 4 Mods installation, identify mods and CC, detect duplicates and likely conflicts, resolve installed versions against a trusted registry, assess patch compatibility, explain what each mod does, and recommend compatible alternatives or related mods.",
+  "language": "en"
+}
