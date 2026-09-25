@@ -7,7 +7,8 @@ const runtime = '14d51168311c25f41d89df370c5e2ad2d5f42e83';
 const broker = 'https://appfactory-project-token-broker.lawrynnjennifer.workers.dev/v1/github/user-token';
 const blueprintPaths = [
   'blueprints/android-compose/.github/workflows/project-automation.yml',
-  'blueprints/entitlements/.github/workflows/project-automation.yml'
+  'blueprints/entitlements/.github/workflows/project-automation.yml',
+  'blueprints/tauri-react/.github/workflows/project-automation.yml'
 ];
 
 for (const path of blueprintPaths) {
@@ -29,9 +30,10 @@ for (const path of blueprintPaths) {
   });
 }
 
-test('mobile and service blueprints share one Project authentication contract', () => {
+test('mobile, service and desktop blueprints share one Project authentication contract', () => {
   const workflows = blueprintPaths.map((path) =>
     fs.readFileSync(new URL(path, root), 'utf8')
   );
   assert.equal(workflows[0], workflows[1]);
+  assert.equal(workflows[0], workflows[2]);
 });

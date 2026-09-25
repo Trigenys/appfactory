@@ -18,6 +18,7 @@ on:
         type: choice
         options:
           - mobile
+          - desktop
           - service
           - landing
       private:
@@ -115,6 +116,8 @@ jobs:
                 + (
                     if $projectType == "mobile" then
                       {platform: "android", preset: "android-compose"}
+                    elif $projectType == "desktop" then
+                      {platform: "windows", preset: "tauri-react"}
                     elif $projectType == "service" then
                       {preset: "entitlements"}
                     else
