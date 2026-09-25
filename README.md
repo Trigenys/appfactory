@@ -181,6 +181,12 @@ External generation engines such as OpenPage plug into AppFactory behind adapter
 See `docs/openpage-engine-poc.md` for the OpenPage audit and the remaining end-to-end integration step.
 
 
+## Desktop project blueprints
+
+AppFactory can provision Windows desktop repositories through `projectType: "desktop"`, `platform: "windows"` and `preset: "tauri-react"`. The versioned blueprint lives in `blueprints/tauri-react/` and includes Tauri 2, React/TypeScript/Vite, a narrow Rust native boundary, CI and AppFactory Project Automation.
+
+Desktop repositories bypass Cloudflare Pages and Workers provisioning. See [Desktop project blueprints](docs/desktop-blueprints.md).
+
 ## Mobile project blueprints
 
 AppFactory can provision native Android repositories through `projectType: "mobile"`, `platform: "android"` and `preset: "android-compose"`. The versioned blueprint lives in `blueprints/android-compose/` and includes Compose UI foundations, CI, AppFactory Project Automation and Roborazzi visual-regression support.
