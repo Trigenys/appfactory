@@ -47,3 +47,25 @@ jobs:
           gradle-version: "9.6.0"
       - name: Validate Android Compose blueprint
         run: gradle -p blueprints/android-compose :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
+
+
+  desktop-blueprint:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Validate desktop frontend
+        shell: pwsh
+        run: |
+          Push-Location blueprints/tauri-react
+          npm install
+          npm run build
+          Pop-Location
+      - name: Check desktop Rust formatting
+        run: cargo fmt --manifest-path blueprints/tauri-react/src-tauri/Cargo.toml -- --check
+      - name: Check desktop native crate
+        run: cargo check --manifest-path blueprints/tauri-react/src-tauri/Cargo.toml
