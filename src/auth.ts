@@ -23,6 +23,11 @@ interface GitHubJwk extends JsonWebKey {
   use?: string;
 }
 
+interface TrustedGitHubCaller {
+  repository: string;
+  workflowRef: string;
+}
+
 let jwksCache: { expiresAt: number; keys: GitHubJwk[] } | undefined;
 
 export class AuthenticationError extends Error {
@@ -72,6 +77,25 @@ function bearerToken(request: Request): string {
 
 function audienceMatches(audience: string | string[], expected: string): boolean {
   return Array.isArray(audience) ? audience.includes(expected) : audience === expected;
+}
+
+function trustedMutationCallers(env: Env, expectedRef: string): TrustedGitHubCaller[] {
+  const owner = env.GITHUB_OWNER || "Trigenys";
+  const appFactoryRepository =
+    env.GITHUB_OIDC_REPOSITORY || `${owner}/appfactory`;
+  const appFactoryWorkflowRef =
+    env.GITHUB_OIDC_WORKFLOW_REF ||
+    `${appFactoryRepository}/.github/workflows/provision-project.yml@${expectedRef}`;
+  const provisionerRepository =
+    env.GITHUB_OIDC_PROVISIONER_REPOSITORY || `${owner}/.github`;
+  const provisionerWorkflowRef =
+    env.GITHUB_OIDC_PROVISIONER_WORKFLOW_REF ||
+    `${provisionerRepository}/.github/workflows/provision-appfactory-project.yml@${expectedRef}`;
+
+  return [
+    { repository: appFactoryRepository, workflowRef: appFactoryWorkflowRef },
+    { repository: provisionerRepository, workflowRef: provisionerWorkflowRef }
+  ];
 }
 
 async function githubJwks(): Promise<GitHubJwk[]> {
@@ -164,12 +188,8 @@ export async function authenticateMutation(
 
   const claims = decodeJson<GitHubOidcClaims>(claimsSegment);
   const now = Math.floor(Date.now() / 1000);
-  const expectedRepository =
-    env.GITHUB_OIDC_REPOSITORY || `${env.GITHUB_OWNER || "Trigenys"}/appfactory`;
   const expectedRef = env.GITHUB_OIDC_REF || "refs/heads/main";
-  const expectedWorkflowRef =
-    env.GITHUB_OIDC_WORKFLOW_REF ||
-    `${expectedRepository}/.github/workflows/provision-project.yml@${expectedRef}`;
+  const trustedCallers = trustedMutationCallers(env, expectedRef);
   const expectedAudience = env.GITHUB_OIDC_AUDIENCE || "appfactory-api";
 
   if (claims.iss !== GITHUB_OIDC_ISSUER) {
@@ -184,13 +204,22 @@ export async function authenticateMutation(
   if (claims.nbf !== undefined && claims.nbf > now + 30) {
     throw new AuthenticationError(401, "OIDC_TOKEN_NOT_ACTIVE", "GitHub OIDC token is not active yet.");
   }
-  if (claims.repository !== expectedRepository) {
+  const repositoryAllowed = trustedCallers.some(
+    (caller) => caller.repository === claims.repository
+  );
+  if (!repositoryAllowed) {
     throw new AuthenticationError(403, "OIDC_REPOSITORY_FORBIDDEN", "GitHub repository is not allowed.");
   }
   if (claims.ref !== expectedRef) {
     throw new AuthenticationError(403, "OIDC_REF_FORBIDDEN", "GitHub ref is not allowed.");
   }
-  if (claims.workflow_ref !== expectedWorkflowRef) {
+
+  const workflowAllowed = trustedCallers.some(
+    (caller) =>
+      caller.repository === claims.repository &&
+      caller.workflowRef === claims.workflow_ref
+  );
+  if (!workflowAllowed) {
     throw new AuthenticationError(403, "OIDC_WORKFLOW_FORBIDDEN", "GitHub workflow is not allowed.");
   }
 
