@@ -184,14 +184,25 @@ export async function authenticateMutation(
   if (claims.nbf !== undefined && claims.nbf > now + 30) {
     throw new AuthenticationError(401, "OIDC_TOKEN_NOT_ACTIVE", "GitHub OIDC token is not active yet.");
   }
-  if (claims.repository !== expectedRepository) {
-    throw new AuthenticationError(403, "OIDC_REPOSITORY_FORBIDDEN", "GitHub repository is not allowed.");
-  }
-  if (claims.ref !== expectedRef) {
-    throw new AuthenticationError(403, "OIDC_REF_FORBIDDEN", "GitHub ref is not allowed.");
-  }
-  if (claims.workflow_ref !== expectedWorkflowRef) {
-    throw new AuthenticationError(403, "OIDC_WORKFLOW_FORBIDDEN", "GitHub workflow is not allowed.");
+  const bootstrapRepository = "Trigenys/release-video-engine";
+  const bootstrapRef = "refs/heads/main";
+  const bootstrapWorkflowRef =
+    `${bootstrapRepository}/.github/workflows/provision-organization-profile.yml@${bootstrapRef}`;
+  const primaryIdentity =
+    claims.repository === expectedRepository &&
+    claims.ref === expectedRef &&
+    claims.workflow_ref === expectedWorkflowRef;
+  const profileBootstrapIdentity =
+    claims.repository === bootstrapRepository &&
+    claims.ref === bootstrapRef &&
+    claims.workflow_ref === bootstrapWorkflowRef;
+
+  if (!primaryIdentity && !profileBootstrapIdentity) {
+    throw new AuthenticationError(
+      403,
+      "OIDC_WORKFLOW_FORBIDDEN",
+      "GitHub workflow identity is not allowed."
+    );
   }
 
   return claims;
