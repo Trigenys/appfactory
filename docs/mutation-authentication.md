@@ -15,19 +15,20 @@ The Worker accepts only short-lived GitHub OIDC tokens that match all of the fol
 
 - issuer: `https://token.actions.githubusercontent.com`;
 - audience: `appfactory-api`;
-- repository: `Trigenys/appfactory`;
 - ref: `refs/heads/main`;
-- workflow ref: `Trigenys/appfactory/.github/workflows/provision-project.yml@refs/heads/main`;
+- one of the explicitly trusted repository/workflow pairs:
+  - `Trigenys/appfactory` + `Trigenys/appfactory/.github/workflows/provision-project.yml@refs/heads/main`;
+  - `Trigenys/.github` + `Trigenys/.github/.github/workflows/provision-appfactory-project.yml@refs/heads/main`;
 - valid RS256 signature against GitHub's published JWKS;
 - valid expiration/not-before window.
 
-This means knowing the Worker URL is not sufficient to provision repositories. The caller must be the approved workflow running from AppFactory's main branch.
+This means knowing the Worker URL is not sufficient to provision repositories. The caller must have write access to one of the approved repositories and run the exact trusted workflow from its main branch. The public organization provisioner exists so repository creation does not depend on private-repository Actions minutes; it does not weaken the OIDC repository/workflow/ref boundary.
 
 ## Provisioning workflow
 
-Use the GitHub Actions workflow **Provision AppFactory Project**. It requests an OIDC token directly from GitHub, builds the AppFactory request and calls the Worker.
+Use either the private AppFactory workflow **Provision AppFactory Project** or the public organization workflow **Provision AppFactory Project (public runner)**. Both request an OIDC token directly from GitHub, build the AppFactory request and call the Worker.
 
-No long-lived AppFactory API key is stored in GitHub or Cloudflare.
+No long-lived AppFactory API key is stored in GitHub or Cloudflare. The public runner workflow is intentionally hosted in `Trigenys/.github`; only repository writers can dispatch it, and AppFactory validates its exact OIDC identity.
 
 ## Development
 
