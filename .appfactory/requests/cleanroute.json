@@ -1,0 +1,11 @@
+{
+  "name": "CleanRoute",
+  "slug": "cleanroute",
+  "projectType": "mobile",
+  "platform": "android",
+  "preset": "android-compose",
+  "private": false,
+  "description": "Offline-first Android operations app for neighborhood waste collection businesses: customers, routes, collections, payments and retention.",
+  "brief": "Application Android mobile-first pour petites entreprises de ramassage d'ordures de quartier. UX très simple pour utilisateurs habitués au téléphone et à Excel. Priorités MVP: clients, tournées par zone, statut de collecte en un geste, paiements et impayés, import/export Excel, offline-first puis synchronisation, raccourcis appel/WhatsApp. Architecture évolutive vers fidélisation, rappels, parrainage, cartographie et optimisation de tournées.",
+  "language": "fr"
+}
