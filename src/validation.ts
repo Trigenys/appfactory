@@ -18,7 +18,7 @@ const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
-const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop", "webapp"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop", "webapp", "profile"]);
 const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
 const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
 const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
@@ -60,19 +60,26 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
   }
 
   const requestedSlug = typeof body.slug === "string" ? body.slug.trim() : "";
-  const slug = slugify(requestedSlug || name);
+  const slug = requestedSlug === ".github" ? ".github" : slugify(requestedSlug || name);
 
-  if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+  if (!slug || (slug !== ".github" && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))) {
     throw new Error("A valid repository slug could not be produced.");
   }
 
   const projectType = body.projectType ?? "landing";
   if (typeof projectType !== "string" || !PROJECT_TYPES.has(projectType as ProjectType)) {
-    throw new Error("projectType must be one of: landing, service, mobile, desktop, webapp.");
+    throw new Error("projectType must be one of: landing, service, mobile, desktop, webapp, profile.");
   }
 
   const preset = body.preset;
   const platform = body.platform;
+  if (projectType === "profile") {
+    return {
+      ...result,
+      projectType: "profile"
+    };
+  }
+
   if (projectType === "service") {
     if (typeof preset !== "string" || !SERVICE_PRESETS.has(preset as ServicePreset)) {
       throw new Error("service projects require preset: entitlements.");
@@ -103,6 +110,14 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     }
   } else if (preset !== undefined || platform !== undefined) {
     throw new Error("preset and platform are only valid for service, mobile, desktop or webapp projects.");
+  }
+
+  if (projectType === "profile" && slug !== ".github") {
+    throw new Error("profile projects must use slug: .github.");
+  }
+
+  if (projectType === "profile" && body.private === true) {
+    throw new Error("profile projects must be public.");
   }
 
   const language = body.language ?? "en";
@@ -137,7 +152,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     name,
     slug,
     description: optionalTrimmedString(body, "description", 300),
-    private: typeof body.private === "boolean" ? body.private : true,
+    private: projectType === "profile" ? false : typeof body.private === "boolean" ? body.private : true,
     brief: optionalTrimmedString(body, "brief", 2000),
     language: language as ProjectLanguage,
     audience: optionalTrimmedString(body, "audience", 300),
