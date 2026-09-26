@@ -582,34 +582,7 @@ export default {
       (url.pathname === "/projects" || url.pathname === "/engines/openpage/generate")
     ) {
       try {
-        const claims = await authenticateMutation(request, env);
-        if (claims.repository === "Trigenys/release-video-engine") {
-          let payload: unknown;
-          try {
-            payload = await request.clone().json();
-          } catch {
-            throw new AuthenticationError(
-              403,
-              "PROFILE_BOOTSTRAP_FORBIDDEN",
-              "Profile bootstrap request must contain valid JSON."
-            );
-          }
-          const body = payload && typeof payload === "object"
-            ? payload as Record<string, unknown>
-            : {};
-          if (
-            url.pathname !== "/projects" ||
-            body.projectType !== "profile" ||
-            body.slug !== ".github" ||
-            body.private !== false
-          ) {
-            throw new AuthenticationError(
-              403,
-              "PROFILE_BOOTSTRAP_FORBIDDEN",
-              "Bootstrap workflow may only provision the public Trigenys organization profile."
-            );
-          }
-        }
+        await authenticateMutation(request, env);
       } catch (error) {
         if (error instanceof AuthenticationError) {
           return json({ error: error.code, message: error.message }, error.status);
