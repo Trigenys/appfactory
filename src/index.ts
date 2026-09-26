@@ -6,7 +6,7 @@ import {
   generateWithOpenPage,
   openPageConfigured
 } from "./engines/openpage";
-import { createRepositoryFromTemplate, getInstallationToken, replaceManifest } from "./github";
+import { createRepositoryFromTemplate, getInstallationToken, provisionOrganizationProfileRepository, replaceManifest } from "./github";
 import {
   getRepositoryHeadSha,
   projectContentHash,
@@ -23,6 +23,7 @@ import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "
 import { commitOpenPageSite, createOpenPageRepository } from "./openpage-repository";
 import type { Env, GitHubRepository } from "./types";
 import { validateCreateProject } from "./validation";
+import { buildOrganizationProfileReadme } from "./profile";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
 type ProjectInputResult =
@@ -315,6 +316,29 @@ async function createProject(request: Request, env: Env): Promise<Response> {
 
   try {
     const token = await getInstallationToken(env);
+
+    if (input.projectType === "profile") {
+      const provisioned = await provisionOrganizationProfileRepository(
+        token,
+        env,
+        input,
+        buildOrganizationProfileReadme()
+      );
+      return json(
+        {
+          status: "PROVISIONED",
+          projectType: "profile",
+          repository: provisioned.repository.full_name,
+          repositoryUrl: provisioned.repository.html_url,
+          defaultBranch: provisioned.repository.default_branch,
+          commitSha: provisioned.commitSha,
+          idempotency: {
+            repositoryReplay: provisioned.replay
+          }
+        },
+        provisioned.replay ? 200 : 201
+      );
+    }
 
     if (input.projectType === "webapp") {
       if (input.preset !== "react-vite") {
