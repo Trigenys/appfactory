@@ -1,0 +1,9 @@
+{
+  "name": "Release Video Engine",
+  "slug": "release-video-engine",
+  "projectType": "landing",
+  "private": true,
+  "language": "en",
+  "description": "Automated release-to-video marketing engine for SaaS and developer-tool teams.",
+  "brief": "Build the go-to-market landing experience for an automated release-to-video product. The product turns GitHub releases, changelogs, product screenshots and brand assets into consistent marketing videos in 9:16, 1:1 and 16:9 formats. Initial audience: SaaS founders, developer-tool teams and small product teams that ship frequently but lack video-production bandwidth. Position it as CI/CD for product marketing: connect a repository, select a release, generate branded videos, then export publish-ready assets. Primary conversion goal: request early access or a demo. Avoid generic AI-video positioning; emphasize deterministic brand-safe templates, repeatability, speed and release automation."
+}
