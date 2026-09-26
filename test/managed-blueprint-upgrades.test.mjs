@@ -8,12 +8,16 @@ function read(path) {
   return fs.readFileSync(new URL(path, root), 'utf8');
 }
 
-test('managed blueprint v3 markers are promoted for mobile and service', () => {
+test('managed blueprint markers expose their current versions', () => {
   const mobile = JSON.parse(read('blueprints/android-compose/.appfactory/mobile.json'));
   const service = JSON.parse(read('blueprints/entitlements/.appfactory/service.json'));
+  const webapp = JSON.parse(read('blueprints/react-vite/.appfactory/webapp.json'));
 
   assert.equal(mobile.blueprintVersion, 3);
   assert.equal(service.blueprintVersion, 3);
+  assert.equal(webapp.blueprintVersion, 1);
+  assert.equal(webapp.projectType, 'webapp');
+  assert.equal(webapp.preset, 'react-vite');
 });
 
 test('managed upgrades preserve the existing repository tree and history', () => {
