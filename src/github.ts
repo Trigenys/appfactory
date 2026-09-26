@@ -383,6 +383,76 @@ export async function createRepositoryFromTemplate(
   return repository;
 }
 
+export async function provisionOrganizationProfileRepository(
+  token: string,
+  env: Env,
+  input: CreateProjectRequest & { slug: string },
+  readme: string
+): Promise<{ repository: GitHubRepository; commitSha: string; replay: boolean }> {
+  if (input.slug !== ".github") {
+    throw new Error("Organization profile repository must use the .github slug.");
+  }
+
+  const owner = env.GITHUB_OWNER || "Trigenys";
+  let repository: GitHubRepository;
+  let created = false;
+
+  try {
+    repository = await githubRequest<GitHubRepository>(
+      token,
+      `/orgs/${encodeURIComponent(owner)}/repos`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: ".github",
+          description: input.description || "Trigenys organization profile and public GitHub community metadata.",
+          private: false,
+          auto_init: true
+        })
+      }
+    );
+    created = true;
+  } catch (error) {
+    if (!(error instanceof GitHubApiError) || error.status !== 422) throw error;
+    repository = await githubRequest<GitHubRepository>(
+      token,
+      `/repos/${encodeURIComponent(owner)}/.github`
+    );
+  }
+
+  const path = `/repos/${encodeURIComponent(owner)}/.github/contents/profile/README.md`;
+  let existingSha: string | undefined;
+
+  try {
+    const existing = await githubRequest<GitHubContentFile>(token, path);
+    existingSha = existing.sha;
+  } catch (error) {
+    if (!(error instanceof GitHubApiError) || error.status !== 404) throw error;
+  }
+
+  const body: Record<string, unknown> = {
+    message: existingSha
+      ? "docs(profile): refresh Trigenys organization profile"
+      : "docs(profile): publish Trigenys organization profile",
+    content: toBase64(readme),
+    branch: repository.default_branch || "main",
+    author: commitAuthor(env)
+  };
+
+  if (existingSha) body.sha = existingSha;
+
+  const result = await githubRequest<GitHubContentCommit>(token, path, {
+    method: "PUT",
+    body: JSON.stringify(body)
+  });
+
+  return {
+    repository,
+    commitSha: result.commit.sha,
+    replay: !created && Boolean(existingSha)
+  };
+}
+
 export async function replaceManifest(
   token: string,
   env: Env,
