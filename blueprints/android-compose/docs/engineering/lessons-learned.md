@@ -34,3 +34,14 @@ Do not turn this file into a raw error-log dump. The goal is institutional memor
 **Fix:** new Android workflows use the current action majors: checkout v7, setup-node v7 where applicable, setup-java v6, Gradle Actions v6 and upload-artifact v7.
 
 **Prevention rule:** a newly introduced blueprint must pin supported current action majors; deprecation warnings are treated as engineering debt, not harmless log noise.
+
+
+## 2026-09-27 — Explicit Compose `weight` import can resolve to an internal symbol
+
+**What happened:** a generated Android product added an explicit `androidx.compose.foundation.layout.weight` import and both its Android CI and Roborazzi workflows failed on the same Kotlin compilation error.
+
+**Root cause:** the public `Modifier.weight(...)` used by Row/Column children is a scope extension. Under the current Compose baseline, explicitly importing the package-level `weight` name can bind to an internal implementation symbol instead of the intended `RowScope`/`ColumnScope` extension.
+
+**Fix:** remove the explicit import and let Kotlin resolve `Modifier.weight(...)` from the enclosing layout scope.
+
+**Prevention rule:** generated Android guidance now forbids explicit `androidx.compose.foundation.layout.weight` imports and reminds maintainers that identical compiler failures in CI and visual regression usually share one source-level cause.
