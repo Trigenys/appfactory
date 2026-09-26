@@ -21,6 +21,7 @@ on:
           - desktop
           - service
           - landing
+          - webapp
       private:
         description: "Create a private repository"
         required: true
@@ -120,6 +121,8 @@ jobs:
                       {platform: "windows", preset: "tauri-react"}
                     elif $projectType == "service" then
                       {preset: "entitlements"}
+                    elif $projectType == "webapp" then
+                      {preset: "react-vite"}
                     else
                       {}
                     end
