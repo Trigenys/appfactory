@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const root = new URL('../', import.meta.url);
-const runtime = '14d51168311c25f41d89df370c5e2ad2d5f42e83';
+const runtime = 'b1deb7b1069739879d7a4acb9cd3521bca835049';
 const broker = 'https://appfactory-project-token-broker.lawrynnjennifer.workers.dev/v1/github/user-token';
 const blueprintPaths = [
   'blueprints/android-compose/.github/workflows/project-automation.yml',
