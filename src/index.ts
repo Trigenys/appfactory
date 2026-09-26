@@ -16,6 +16,7 @@ import {
 } from "./idempotency";
 import { buildLandingManifest } from "./manifest";
 import { provisionDesktopRepository } from "./desktop-provisioning";
+import { provisionWebAppRepository } from "./webapp-provisioning";
 import { provisionMobileRepository } from "./mobile-provisioning";
 import { provisionServiceRepository } from "./service-provisioning";
 import { provisionServiceCloudflare, ServiceCloudflareProvisioningError } from "./service-cloudflare";
@@ -315,6 +316,41 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   try {
     const token = await getInstallationToken(env);
 
+    if (input.projectType === "webapp") {
+      if (input.preset !== "react-vite") {
+        throw new Error("Webapp preset is required after validation.");
+      }
+      const provisioned = await provisionWebAppRepository(token, env, {
+        ...input,
+        projectType: "webapp",
+        preset: input.preset
+      });
+      return json(
+        {
+          status: "PROVISIONED",
+          projectType: "webapp",
+          preset: input.preset,
+          repository: provisioned.repository.full_name,
+          repositoryUrl: provisioned.repository.html_url,
+          defaultBranch: provisioned.repository.default_branch,
+          commitSha: provisioned.commitSha,
+          idempotency: {
+            repositoryReplay: provisioned.replay
+          },
+          quality: {
+            frontend: "React + TypeScript + Vite",
+            node: "24",
+            projectAutomation: "AppFactory OIDC broker"
+          },
+          nextSteps: {
+            projectAutomation: "Project Automation is preconfigured through GitHub Actions OIDC and the AppFactory broker; no repository PROJECT_TOKEN is required.",
+            productBootstrap: "Add domain features and choose runtime/deployment infrastructure according to the product workload."
+          }
+        },
+        provisioned.replay ? 200 : 201
+      );
+    }
+
     if (input.projectType === "desktop") {
       if (input.platform !== "windows" || input.preset !== "tauri-react") {
         throw new Error("Desktop platform and preset are required after validation.");
@@ -512,6 +548,7 @@ export default {
         serviceBlueprintVersion: 3,
         mobileBlueprintVersion: 3,
         desktopBlueprintVersion: 1,
+        webappBlueprintVersion: 1,
         runtimeConfig: config
       });
     }
