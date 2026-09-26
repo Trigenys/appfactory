@@ -73,13 +73,6 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
 
   const preset = body.preset;
   const platform = body.platform;
-  if (projectType === "profile") {
-    return {
-      ...result,
-      projectType: "profile"
-    };
-  }
-
   if (projectType === "service") {
     if (typeof preset !== "string" || !SERVICE_PRESETS.has(preset as ServicePreset)) {
       throw new Error("service projects require preset: entitlements.");
@@ -165,6 +158,13 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     primaryCtaLabel: optionalTrimmedString(body, "primaryCtaLabel", 80),
     primaryCtaHref: optionalTrimmedString(body, "primaryCtaHref", 500)
   };
+
+  if (projectType === "profile") {
+    return {
+      ...result,
+      projectType: "profile"
+    };
+  }
 
   if (projectType === "service") {
     return {
