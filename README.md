@@ -121,6 +121,8 @@ Optional variables:
 - `GITHUB_WEBAPP_BLUEPRINT_OWNER`
 - `GITHUB_WEBAPP_BLUEPRINT_REPO`
 - `GITHUB_WEBAPP_BLUEPRINT_REF`
+- `GITHUB_OIDC_PROVISIONER_REPOSITORY` — optional public provisioning repository; defaults to `<GITHUB_OWNER>/.github`
+- `GITHUB_OIDC_PROVISIONER_WORKFLOW_REF` — optional exact trusted workflow identity for the public provisioner
 - `OPENPAGE_GENERATOR_URL` — self-hosted OpenPage base URL or full `/api/generate` URL
 - `OPENPAGE_API_TOKEN` — optional bearer token for a protected Trigenys OpenPage deployment
 - `CLOUDFLARE_BUILD_TOKEN_UUID` — optional existing Workers Builds token UUID when automatic discovery is ambiguous
