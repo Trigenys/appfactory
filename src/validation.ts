@@ -10,19 +10,21 @@ import type {
   MobilePreset,
   ProjectLanguage,
   ProjectType,
-  ServicePreset
+  ServicePreset,
+  WebAppPreset
 } from "./types";
 
 const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
 const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
-const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop"]);
+const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop", "webapp"]);
 const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
 const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
 const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
 const DESKTOP_PLATFORMS = new Set<DesktopPlatform>(["windows"]);
 const DESKTOP_PRESETS = new Set<DesktopPreset>(["tauri-react"]);
+const WEBAPP_PRESETS = new Set<WebAppPreset>(["react-vite"]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -66,7 +68,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
 
   const projectType = body.projectType ?? "landing";
   if (typeof projectType !== "string" || !PROJECT_TYPES.has(projectType as ProjectType)) {
-    throw new Error("projectType must be one of: landing, service, mobile, desktop.");
+    throw new Error("projectType must be one of: landing, service, mobile, desktop, webapp.");
   }
 
   const preset = body.preset;
@@ -92,8 +94,15 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     if (typeof preset !== "string" || !DESKTOP_PRESETS.has(preset as DesktopPreset)) {
       throw new Error("windows desktop projects require preset: tauri-react.");
     }
+  } else if (projectType === "webapp") {
+    if (typeof preset !== "string" || !WEBAPP_PRESETS.has(preset as WebAppPreset)) {
+      throw new Error("webapp projects require preset: react-vite.");
+    }
+    if (platform !== undefined) {
+      throw new Error("platform is not valid when projectType is webapp.");
+    }
   } else if (preset !== undefined || platform !== undefined) {
-    throw new Error("preset and platform are only valid for service, mobile or desktop projects.");
+    throw new Error("preset and platform are only valid for service, mobile, desktop or webapp projects.");
   }
 
   const language = body.language ?? "en";
@@ -165,6 +174,14 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
       projectType: "desktop",
       platform: platform as DesktopPlatform,
       preset: preset as DesktopPreset
+    };
+  }
+
+  if (projectType === "webapp") {
+    return {
+      ...result,
+      projectType: "webapp",
+      preset: preset as WebAppPreset
     };
   }
 
