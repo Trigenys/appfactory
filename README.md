@@ -118,6 +118,9 @@ Optional variables:
 - `GITHUB_TEMPLATE_REPO` (defaults to `appfactory-landing-template`)
 - `GITHUB_COMMIT_AUTHOR_NAME`
 - `GITHUB_COMMIT_AUTHOR_EMAIL`
+- `GITHUB_WEBAPP_BLUEPRINT_OWNER`
+- `GITHUB_WEBAPP_BLUEPRINT_REPO`
+- `GITHUB_WEBAPP_BLUEPRINT_REF`
 - `OPENPAGE_GENERATOR_URL` — self-hosted OpenPage base URL or full `/api/generate` URL
 - `OPENPAGE_API_TOKEN` — optional bearer token for a protected Trigenys OpenPage deployment
 - `CLOUDFLARE_BUILD_TOKEN_UUID` — optional existing Workers Builds token UUID when automatic discovery is ambiguous
@@ -186,6 +189,12 @@ See `docs/openpage-engine-poc.md` for the OpenPage audit and the remaining end-t
 AppFactory can provision Windows desktop repositories through `projectType: "desktop"`, `platform: "windows"` and `preset: "tauri-react"`. The versioned blueprint lives in `blueprints/tauri-react/` and includes Tauri 2, React/TypeScript/Vite, a narrow Rust native boundary, CI and AppFactory Project Automation.
 
 Desktop repositories bypass Cloudflare Pages and Workers provisioning. See [Desktop project blueprints](docs/desktop-blueprints.md).
+
+## Web application blueprints
+
+AppFactory can provision general React web applications through `projectType: "webapp"` and `preset: "react-vite"`. The versioned blueprint lives in `blueprints/react-vite/` and includes React 19, TypeScript, Vite, Node.js 24 CI and AppFactory Project Automation.
+
+The webapp blueprint intentionally does not assume a hosting provider, backend, authentication system or persistence layer. Product requirements decide those boundaries after provisioning. See [Web application blueprints](docs/webapp-blueprints.md).
 
 ## Mobile project blueprints
 
