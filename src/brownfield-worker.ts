@@ -11,6 +11,11 @@ interface WorkerScript {
   tag: string;
 }
 
+interface CloudflareWorkerResource {
+  id: string;
+  name: string;
+}
+
 interface RepositoryConnection {
   repo_connection_uuid: string;
 }
@@ -382,7 +387,26 @@ async function listWorkerScripts(env: Env): Promise<WorkerScript[]> {
   }
 }
 
-async function createBootstrapWorker(env: Env, workerName: string): Promise<void> {
+async function createWorkerResource(
+  env: Env,
+  workerName: string
+): Promise<CloudflareWorkerResource> {
+  assertCloudflareConfig(env);
+  try {
+    return await cloudflareRequest<CloudflareWorkerResource>(
+      env,
+      `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/workers/workers`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: workerName })
+      }
+    );
+  } catch (error) {
+    permissionError(error, "create Workers", ["Workers product Admin (create Worker)"]);
+  }
+}
+
+async function uploadBootstrapWorker(env: Env, workerName: string): Promise<void> {
   assertCloudflareConfig(env);
   const form = new FormData();
   form.set(
@@ -409,7 +433,31 @@ async function createBootstrapWorker(env: Env, workerName: string): Promise<void
       { method: "PUT", body: form }
     );
   } catch (error) {
-    permissionError(error, "create Workers", ["Workers product Admin (create Worker)"]);
+    permissionError(error, "upload Worker bootstrap code", [
+      "Workers product Editor (deploy existing Worker)"
+    ]);
+  }
+}
+
+async function createBootstrapWorker(env: Env, workerName: string): Promise<void> {
+  assertCloudflareConfig(env);
+  const worker = await createWorkerResource(env, workerName);
+  try {
+    await uploadBootstrapWorker(env, workerName);
+  } catch (error) {
+    try {
+      await cloudflareRequest<unknown>(
+        env,
+        `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/workers/workers/${encodeURIComponent(worker.id)}`,
+        { method: "DELETE" }
+      );
+    } catch (rollbackError) {
+      throw new BrownfieldWorkerProvisioningError(
+        "WORKER_BOOTSTRAP_ROLLBACK_FAILED",
+        `Worker ${workerName} was created, but bootstrap upload failed and the empty Worker could not be removed. Original error: ${error instanceof Error ? error.message : String(error)}. Rollback error: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
+      );
+    }
+    throw error;
   }
 }
 
