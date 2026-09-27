@@ -109,7 +109,7 @@ Required Worker runtime variables/secrets:
 - `GITHUB_INSTALLATION_ID`
 - `GITHUB_PRIVATE_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service provisioning additionally needs D1 Edit, Workers Scripts Edit and Workers Builds Configuration Edit.
+- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service and brownfield Worker creation additionally require Workers product-level Admin, D1 Edit where applicable, and Workers Builds Configuration Edit. Existing Worker code updates need Workers product-level Editor.
 
 Optional variables:
 
@@ -233,6 +233,6 @@ The first supported brownfield recipe is deliberately narrow:
 - build/deploy commands are the reviewed Pywrangler recipe;
 - Worker runtime secret names must use the repository prefix;
 - an existing Worker without an AppFactory ownership marker is never silently adopted;
-- AppFactory reuses its existing Cloudflare account token and Workers Builds token. Creating a brand-new Worker requires the AppFactory token to have Workers product-level Admin; Editor is sufficient only after the Worker already exists.
+- AppFactory reuses its existing Cloudflare account token and Workers Builds token. Creating a brand-new Worker uses Cloudflare's explicit Worker resource API first, which requires Workers product-level Admin; bootstrap code is uploaded only after the resource exists, where Editor would otherwise be sufficient. If bootstrap upload fails, AppFactory removes the empty Worker so retries stay idempotent.
 
 This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.
