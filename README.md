@@ -109,7 +109,8 @@ Required Worker runtime variables/secrets:
 - `GITHUB_INSTALLATION_ID`
 - `GITHUB_PRIVATE_KEY`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` — existing AppFactory Cloudflare token. Landing provisioning needs Pages write access; service and brownfield Worker creation additionally require Workers product-level Admin, D1 Edit where applicable, and Workers Builds Configuration Edit. Existing Worker code updates need Workers product-level Editor.
+- `CLOUDFLARE_API_TOKEN` — user-scoped Cloudflare token retained for the Workers Builds API, which does not accept account-owned tokens. It is also the backward-compatible fallback for resource APIs when no dedicated resource token is configured.
+- `CLOUDFLARE_PAGES_D1_TOKEN` — dedicated Cloudflare resource token for Pages, D1 and Worker resource operations. Prefer an account-owned token for automation. Brownfield/service Worker creation requires Workers product-level Admin; existing Worker deployment requires Editor; D1/Pages permissions remain scoped to the resources AppFactory manages.
 
 Optional variables:
 
@@ -233,6 +234,6 @@ The first supported brownfield recipe is deliberately narrow:
 - build/deploy commands are the reviewed Pywrangler recipe;
 - Worker runtime secret names must use the repository prefix;
 - an existing Worker without an AppFactory ownership marker is never silently adopted;
-- AppFactory reuses its existing Cloudflare account token and Workers Builds token. Creating a brand-new Worker uses Cloudflare's explicit Worker resource API first, which requires Workers product-level Admin; bootstrap code is uploaded only after the resource exists, where Editor would otherwise be sufficient. If bootstrap upload fails, AppFactory removes the empty Worker so retries stay idempotent.
+- AppFactory deliberately separates Cloudflare resource authorization from Workers Builds authorization: resource calls prefer `CLOUDFLARE_PAGES_D1_TOKEN`, while `/builds/*` calls keep using the user-scoped `CLOUDFLARE_API_TOKEN`. This matches Cloudflare's current API constraint that Workers Builds requires a user-scoped token. Creating a brand-new Worker uses the explicit Worker resource API and requires Workers product-level Admin; bootstrap code is uploaded only after the resource exists. If bootstrap upload fails, AppFactory removes the empty Worker so retries stay idempotent.
 
 This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.

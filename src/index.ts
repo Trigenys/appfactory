@@ -56,7 +56,10 @@ function runtimeConfig(env: Env) {
     },
     cloudflare: {
       accountId: Boolean(env.CLOUDFLARE_ACCOUNT_ID),
-      apiToken: Boolean(env.CLOUDFLARE_API_TOKEN)
+      apiToken: Boolean(env.CLOUDFLARE_API_TOKEN),
+      buildsApiToken: Boolean(env.CLOUDFLARE_API_TOKEN),
+      resourceApiToken: Boolean(env.CLOUDFLARE_PAGES_D1_TOKEN),
+      resourceApiTokenFallback: !env.CLOUDFLARE_PAGES_D1_TOKEN && Boolean(env.CLOUDFLARE_API_TOKEN)
     },
     engines: {
       native: { configured: true },

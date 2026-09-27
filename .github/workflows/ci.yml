@@ -31,6 +31,8 @@ jobs:
         run: npm run test:blueprint-upgrades
       - name: Validate Cloudflare Worker bootstrap contract
         run: npm run test:cloudflare-worker-bootstrap
+      - name: Validate Cloudflare credential routing
+        run: npm run test:cloudflare-credential-routing
 
 
   android-blueprint:
