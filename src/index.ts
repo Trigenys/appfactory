@@ -614,7 +614,8 @@ async function provisionExistingPagesD1(
           message: error.message,
           requiredPermissions: error.requiredPermissions
         },
-        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+        (error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED" ||
+          error.code === "CLOUDFLARE_ACCESS_DENIED")
           ? 502
           : conflictCodes.has(error.code)
             ? 409
