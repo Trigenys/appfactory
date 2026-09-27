@@ -516,6 +516,7 @@ async function createBootstrapWorker(
   workerName: string,
   databaseId: string
 ): Promise<void> {
+  assertCloudflareConfig(env);
   const worker = await createWorkerResource(env, workerName);
   try {
     await uploadBootstrapWorker(env, workerName, databaseId);
