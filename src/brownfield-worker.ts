@@ -409,7 +409,7 @@ async function createBootstrapWorker(env: Env, workerName: string): Promise<void
       { method: "PUT", body: form }
     );
   } catch (error) {
-    permissionError(error, "create Workers", ["Workers Scripts Edit"]);
+    permissionError(error, "create Workers", ["Workers product Admin (create Worker)"]);
   }
 }
 

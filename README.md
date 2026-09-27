@@ -233,6 +233,6 @@ The first supported brownfield recipe is deliberately narrow:
 - build/deploy commands are the reviewed Pywrangler recipe;
 - Worker runtime secret names must use the repository prefix;
 - an existing Worker without an AppFactory ownership marker is never silently adopted;
-- AppFactory reuses its existing Cloudflare account token and Workers Builds token.
+- AppFactory reuses its existing Cloudflare account token and Workers Builds token. Creating a brand-new Worker requires the AppFactory token to have Workers product-level Admin; Editor is sufficient only after the Worker already exists.
 
 This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.
