@@ -58,7 +58,7 @@ class CloudflareApiError extends Error {
 
 function assertCloudflareConfig(env: Env): asserts env is Env & {
   CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_API_TOKEN: string;
+  CLOUDFLARE_PAGES_D1_TOKEN: string;
 } {
   if (!env.CLOUDFLARE_ACCOUNT_ID) {
     throw new PagesD1ProvisioningError(
@@ -66,10 +66,10 @@ function assertCloudflareConfig(env: Env): asserts env is Env & {
       "Pages D1 provisioning requires CLOUDFLARE_ACCOUNT_ID."
     );
   }
-  if (!env.CLOUDFLARE_API_TOKEN) {
+  if (!env.CLOUDFLARE_PAGES_D1_TOKEN) {
     throw new PagesD1ProvisioningError(
-      "CLOUDFLARE_API_TOKEN_REQUIRED",
-      "Pages D1 provisioning requires the existing AppFactory CLOUDFLARE_API_TOKEN."
+      "CLOUDFLARE_PAGES_D1_TOKEN_REQUIRED",
+      "Pages D1 provisioning requires the dedicated CLOUDFLARE_PAGES_D1_TOKEN Worker secret."
     );
   }
 }
@@ -82,7 +82,7 @@ async function cloudflareRequest<T>(
   assertCloudflareConfig(env);
 
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${env.CLOUDFLARE_API_TOKEN}`);
+  headers.set("Authorization", `Bearer ${env.CLOUDFLARE_PAGES_D1_TOKEN}`);
   if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -326,7 +326,7 @@ export async function provisionPagesD1(
 
   const project = await bindDatabaseToPages(env, projectName, database.uuid);
   const deployment = await triggerPagesDeployment(
-    env,
+    { ...env, CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_PAGES_D1_TOKEN },
     project,
     project.production_branch || "main"
   ) as CloudflarePagesDeployment;
