@@ -1,4 +1,4 @@
-import { AuthenticationError, authenticateMutation } from "./auth";
+import { AuthenticationError, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
@@ -24,6 +24,11 @@ import { commitOpenPageSite, createOpenPageRepository } from "./openpage-reposit
 import type { Env, GitHubRepository } from "./types";
 import { validateCreateProject } from "./validation";
 import { buildOrganizationProfileReadme } from "./profile";
+import {
+  BrownfieldWorkerProvisioningError,
+  provisionBrownfieldWorker,
+  type BrownfieldWorkerRequest
+} from "./brownfield-worker";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
 type ProjectInputResult =
@@ -530,6 +535,104 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   }
 }
 
+async function provisionExistingWorker(
+  request: Request,
+  env: Env,
+  claims: GitHubOidcClaims
+): Promise<Response> {
+  if (!claims.repository) {
+    return json(
+      {
+        error: "OIDC_REPOSITORY_REQUIRED",
+        message: "GitHub OIDC token does not identify a repository."
+      },
+      403
+    );
+  }
+
+  let payload: BrownfieldWorkerRequest;
+  try {
+    payload = await request.json() as BrownfieldWorkerRequest;
+  } catch {
+    return json(
+      {
+        error: "INVALID_JSON",
+        message: "Request body must contain valid JSON."
+      },
+      400
+    );
+  }
+
+  if (!payload || typeof payload !== "object" || typeof payload.repository !== "string") {
+    return json(
+      {
+        error: "INVALID_INFRASTRUCTURE_REQUEST",
+        message: "Infrastructure request must identify its repository."
+      },
+      400
+    );
+  }
+
+  try {
+    const token = await getInstallationToken(env);
+    const result = await provisionBrownfieldWorker(
+      token,
+      env,
+      claims.repository,
+      payload
+    );
+    return json(
+      {
+        status: "PROVISIONED",
+        infrastructure: result
+      },
+      200
+    );
+  } catch (error) {
+    console.error(
+      "Brownfield Worker provisioning failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
+
+    if (error instanceof BrownfieldWorkerProvisioningError) {
+      const conflictCodes = new Set([
+        "REPOSITORY_MISMATCH",
+        "WORKER_NAME_FORBIDDEN",
+        "ROOT_DIRECTORY_FORBIDDEN",
+        "BUILD_COMMAND_FORBIDDEN",
+        "SECRET_NAME_FORBIDDEN",
+        "INFRASTRUCTURE_MARKER_MISMATCH",
+        "BROWNFIELD_WORKER_UNCLAIMED"
+      ]);
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+          ? 502
+          : conflictCodes.has(error.code)
+            ? 409
+            : 400
+      );
+    }
+
+    return json(
+      {
+        error: "INFRASTRUCTURE_PROVISIONING_FAILED",
+        message:
+          env.ENVIRONMENT === "production"
+            ? "Infrastructure provisioning failed. Check AppFactory logs for details."
+            : error instanceof Error
+              ? error.message
+              : "Infrastructure provisioning failed."
+      },
+      500
+    );
+  }
+}
+
 async function generateOpenPage(request: Request, env: Env): Promise<Response> {
   const parsed = await readProjectInput(request);
   if ("response" in parsed) return parsed.response;
@@ -560,6 +663,7 @@ async function generateOpenPage(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    let infrastructureClaims: GitHubOidcClaims | null = null;
 
     if (request.method === "GET" && url.pathname === "/health") {
       const config = runtimeConfig(env);
@@ -575,6 +679,21 @@ export default {
         webappBlueprintVersion: 1,
         runtimeConfig: config
       });
+    }
+
+    if (request.method === "POST" && url.pathname === "/infrastructure/worker") {
+      try {
+        infrastructureClaims = await authenticateInfrastructureMutation(request, env);
+      } catch (error) {
+        if (error instanceof AuthenticationError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        console.error("Infrastructure authentication failed", error);
+        return json(
+          { error: "AUTHENTICATION_FAILED", message: "Unable to authenticate infrastructure request." },
+          401
+        );
+      }
     }
 
     if (
@@ -593,6 +712,14 @@ export default {
           401
         );
       }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/infrastructure/worker" &&
+      infrastructureClaims
+    ) {
+      return provisionExistingWorker(request, env, infrastructureClaims);
     }
 
     if (request.method === "POST" && url.pathname === "/projects") {
