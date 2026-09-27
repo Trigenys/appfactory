@@ -767,7 +767,18 @@ export async function provisionBrownfieldWorker(
     deployCommand: request.deployCommand
   };
 
-  if (marker && JSON.stringify(marker) !== JSON.stringify(expectedMarker)) {
+  if (
+    marker &&
+    (
+      marker.schemaVersion !== expectedMarker.schemaVersion ||
+      marker.provider !== expectedMarker.provider ||
+      marker.repository !== expectedMarker.repository ||
+      marker.workerName !== expectedMarker.workerName ||
+      marker.rootDirectory !== expectedMarker.rootDirectory ||
+      marker.buildCommand !== expectedMarker.buildCommand ||
+      marker.deployCommand !== expectedMarker.deployCommand
+    )
+  ) {
     throw new BrownfieldWorkerProvisioningError(
       "INFRASTRUCTURE_MARKER_MISMATCH",
       "Existing AppFactory Worker marker does not match the requested infrastructure."
