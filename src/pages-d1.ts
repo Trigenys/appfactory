@@ -118,8 +118,8 @@ async function cloudflareRequest<T>(
 function permissionError(error: unknown, operation: string, permissions: string[]): never {
   if (error instanceof CloudflareApiError && (error.status === 401 || error.status === 403)) {
     throw new PagesD1ProvisioningError(
-      "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED",
-      `The existing AppFactory Cloudflare token cannot ${operation}. Extend that token instead of creating a duplicate credential.`,
+      "CLOUDFLARE_ACCESS_DENIED",
+      `Cloudflare rejected ${operation} (HTTP ${error.status}; ${error.detail.slice(0, 200)}). Check the AppFactory Worker token and its account resource scope.`,
       permissions
     );
   }
