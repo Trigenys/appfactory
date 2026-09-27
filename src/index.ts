@@ -29,6 +29,11 @@ import {
   provisionBrownfieldWorker,
   type BrownfieldWorkerRequest
 } from "./brownfield-worker";
+import {
+  PagesD1ProvisioningError,
+  provisionPagesD1,
+  type PagesD1Request
+} from "./pages-d1";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
 type ProjectInputResult =
@@ -535,6 +540,103 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   }
 }
 
+async function provisionExistingPagesD1(
+  request: Request,
+  env: Env,
+  claims: GitHubOidcClaims
+): Promise<Response> {
+  if (!claims.repository) {
+    return json(
+      {
+        error: "OIDC_REPOSITORY_REQUIRED",
+        message: "GitHub OIDC token does not identify a repository."
+      },
+      403
+    );
+  }
+
+  let payload: PagesD1Request;
+  try {
+    payload = await request.json() as PagesD1Request;
+  } catch {
+    return json(
+      {
+        error: "INVALID_JSON",
+        message: "Request body must contain valid JSON."
+      },
+      400
+    );
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    typeof payload.repository !== "string" ||
+    typeof payload.recipe !== "string"
+  ) {
+    return json(
+      {
+        error: "INVALID_INFRASTRUCTURE_REQUEST",
+        message: "Pages D1 request must include repository and recipe."
+      },
+      400
+    );
+  }
+
+  try {
+    const result = await provisionPagesD1(
+      env,
+      claims.repository,
+      payload
+    );
+    return json(
+      {
+        status: "PROVISIONED",
+        infrastructure: result
+      },
+      200
+    );
+  } catch (error) {
+    console.error(
+      "Pages D1 provisioning failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
+
+    if (error instanceof PagesD1ProvisioningError) {
+      const conflictCodes = new Set([
+        "REPOSITORY_MISMATCH",
+        "UNSUPPORTED_PAGES_D1_RECIPE"
+      ]);
+
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+          ? 502
+          : conflictCodes.has(error.code)
+            ? 409
+            : 400
+      );
+    }
+
+    return json(
+      {
+        error: "PAGES_D1_PROVISIONING_FAILED",
+        message:
+          env.ENVIRONMENT === "production"
+            ? "Pages D1 provisioning failed. Check AppFactory logs for details."
+            : error instanceof Error
+              ? error.message
+              : "Pages D1 provisioning failed."
+      },
+      500
+    );
+  }
+}
+
 async function provisionExistingWorker(
   request: Request,
   env: Env,
@@ -681,7 +783,10 @@ export default {
       });
     }
 
-    if (request.method === "POST" && url.pathname === "/infrastructure/worker") {
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/infrastructure/worker" || url.pathname === "/infrastructure/pages-d1")
+    ) {
       try {
         infrastructureClaims = await authenticateInfrastructureMutation(request, env);
       } catch (error) {
@@ -712,6 +817,14 @@ export default {
           401
         );
       }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/infrastructure/pages-d1" &&
+      infrastructureClaims
+    ) {
+      return provisionExistingPagesD1(request, env, infrastructureClaims);
     }
 
     if (
