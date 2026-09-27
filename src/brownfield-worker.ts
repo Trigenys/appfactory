@@ -145,8 +145,12 @@ async function cloudflareRequest<T>(
   init: RequestInit = {}
 ): Promise<T> {
   assertCloudflareConfig(env);
+  const isBuildsApi = path.includes("/builds/") || path.endsWith("/builds");
+  const apiToken = isBuildsApi
+    ? env.CLOUDFLARE_API_TOKEN
+    : env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${env.CLOUDFLARE_API_TOKEN}`);
+  headers.set("Authorization", `Bearer ${apiToken}`);
   if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -176,7 +180,7 @@ function permissionError(
   if (error instanceof CloudflareApiError && (error.status === 401 || error.status === 403)) {
     throw new BrownfieldWorkerProvisioningError(
       "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED",
-      `The existing AppFactory Cloudflare token cannot ${operation}. Extend that token instead of creating another credential.`,
+      `Cloudflare denied ${operation} on ${error.path} (HTTP ${error.status}; ${error.detail.slice(0, 200)}). Resource APIs use CLOUDFLARE_PAGES_D1_TOKEN when configured; Workers Builds uses the user-scoped CLOUDFLARE_API_TOKEN.`,
       permissions
     );
   }
