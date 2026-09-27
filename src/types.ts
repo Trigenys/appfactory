@@ -142,6 +142,14 @@ export interface CloudflarePagesProject {
   name: string;
   subdomain?: string;
   production_branch: string;
+  deployment_configs?: {
+    production?: {
+      d1_databases?: Record<string, { id?: string }>;
+    };
+    preview?: {
+      d1_databases?: Record<string, { id?: string }>;
+    };
+  };
   source?: {
     type: "github" | "gitlab";
     config: {
