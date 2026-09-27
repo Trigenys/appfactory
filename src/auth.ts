@@ -4,7 +4,7 @@ const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const GITHUB_JWKS_URL = "https://token.actions.githubusercontent.com/.well-known/jwks";
 const JWKS_TTL_MS = 10 * 60 * 1000;
 
-interface GitHubOidcClaims {
+export interface GitHubOidcClaims {
   iss: string;
   aud: string | string[];
   exp: number;
@@ -160,15 +160,23 @@ async function verifyWithKey(
   }
 }
 
-export async function authenticateMutation(
+async function verifyOidcToken(
   request: Request,
   env: Env
-): Promise<GitHubOidcClaims> {
+): Promise<{ claims: GitHubOidcClaims; expectedRef: string }> {
   if (env.ENVIRONMENT === "development") {
     return {
-      iss: "development",
-      aud: "development",
-      exp: Math.floor(Date.now() / 1000) + 60
+      claims: {
+        iss: "development",
+        aud: "development",
+        exp: Math.floor(Date.now() / 1000) + 60,
+        repository: env.GITHUB_OIDC_REPOSITORY || "Trigenys/appfactory",
+        ref: env.GITHUB_OIDC_REF || "refs/heads/main",
+        workflow_ref:
+          env.GITHUB_OIDC_WORKFLOW_REF ||
+          "Trigenys/appfactory/.github/workflows/provision-project.yml@refs/heads/main"
+      },
+      expectedRef: env.GITHUB_OIDC_REF || "refs/heads/main"
     };
   }
 
@@ -189,7 +197,6 @@ export async function authenticateMutation(
   const claims = decodeJson<GitHubOidcClaims>(claimsSegment);
   const now = Math.floor(Date.now() / 1000);
   const expectedRef = env.GITHUB_OIDC_REF || "refs/heads/main";
-  const trustedCallers = trustedMutationCallers(env, expectedRef);
   const expectedAudience = env.GITHUB_OIDC_AUDIENCE || "appfactory-api";
 
   if (claims.iss !== GITHUB_OIDC_ISSUER) {
@@ -204,14 +211,33 @@ export async function authenticateMutation(
   if (claims.nbf !== undefined && claims.nbf > now + 30) {
     throw new AuthenticationError(401, "OIDC_TOKEN_NOT_ACTIVE", "GitHub OIDC token is not active yet.");
   }
+  if (claims.ref !== expectedRef) {
+    throw new AuthenticationError(403, "OIDC_REF_FORBIDDEN", "GitHub ref is not allowed.");
+  }
+
+  return { claims, expectedRef };
+}
+
+export async function authenticateMutation(
+  request: Request,
+  env: Env
+): Promise<GitHubOidcClaims> {
+  if (env.ENVIRONMENT === "development") {
+    return {
+      iss: "development",
+      aud: "development",
+      exp: Math.floor(Date.now() / 1000) + 60
+    };
+  }
+
+  const { claims, expectedRef } = await verifyOidcToken(request, env);
+  const trustedCallers = trustedMutationCallers(env, expectedRef);
+
   const repositoryAllowed = trustedCallers.some(
     (caller) => caller.repository === claims.repository
   );
   if (!repositoryAllowed) {
     throw new AuthenticationError(403, "OIDC_REPOSITORY_FORBIDDEN", "GitHub repository is not allowed.");
-  }
-  if (claims.ref !== expectedRef) {
-    throw new AuthenticationError(403, "OIDC_REF_FORBIDDEN", "GitHub ref is not allowed.");
   }
 
   const workflowAllowed = trustedCallers.some(
@@ -221,6 +247,47 @@ export async function authenticateMutation(
   );
   if (!workflowAllowed) {
     throw new AuthenticationError(403, "OIDC_WORKFLOW_FORBIDDEN", "GitHub workflow is not allowed.");
+  }
+
+  return claims;
+}
+
+export async function authenticateInfrastructureMutation(
+  request: Request,
+  env: Env
+): Promise<GitHubOidcClaims> {
+  if (env.ENVIRONMENT === "development") {
+    return {
+      iss: "development",
+      aud: "development",
+      exp: Math.floor(Date.now() / 1000) + 60,
+      repository: "Trigenys/product-identity",
+      ref: "refs/heads/main",
+      workflow_ref:
+        "Trigenys/product-identity/.github/workflows/appfactory-infrastructure.yml@refs/heads/main"
+    };
+  }
+
+  const { claims, expectedRef } = await verifyOidcToken(request, env);
+  const owner = env.GITHUB_OWNER || "Trigenys";
+  const repository = claims.repository || "";
+
+  if (!repository.startsWith(`${owner}/`)) {
+    throw new AuthenticationError(
+      403,
+      "OIDC_INFRA_REPOSITORY_FORBIDDEN",
+      "Infrastructure self-service is restricted to repositories owned by the configured GitHub organization."
+    );
+  }
+
+  const expectedWorkflow =
+    `${repository}/.github/workflows/appfactory-infrastructure.yml@${expectedRef}`;
+  if (claims.workflow_ref !== expectedWorkflow) {
+    throw new AuthenticationError(
+      403,
+      "OIDC_INFRA_WORKFLOW_FORBIDDEN",
+      "Infrastructure self-service requires the canonical AppFactory infrastructure workflow on the protected main ref."
+    );
   }
 
   return claims;
