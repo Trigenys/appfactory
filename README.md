@@ -212,3 +212,27 @@ Production mutation endpoints are authenticated with GitHub Actions OIDC. Knowin
 Use the **Provision AppFactory Project** workflow in `.github/workflows/provision-project.yml`. The Worker validates the short-lived GitHub token signature, audience, repository, main ref and exact workflow identity before accepting `POST /projects` or `POST /engines/openpage/generate`.
 
 See [Mutation authentication](docs/mutation-authentication.md).
+
+
+### Brownfield Worker self-service
+
+Existing Trigenys repositories can provision their own Cloudflare Python Worker without receiving the AppFactory Cloudflare credentials.
+
+The repository must call `POST /infrastructure/worker` from the exact workflow:
+
+```text
+<repository>/.github/workflows/appfactory-infrastructure.yml@refs/heads/main
+```
+
+Authentication is a short-lived GitHub Actions OIDC token with audience `appfactory-api`. AppFactory validates the token signature, organization, protected main ref and exact workflow identity. The caller may provision only the repository named by its own OIDC claim.
+
+The first supported brownfield recipe is deliberately narrow:
+
+- Worker name is derived from the repository: `<repo>-api`;
+- root directory is `/backend`;
+- build/deploy commands are the reviewed Pywrangler recipe;
+- Worker runtime secret names must use the repository prefix;
+- an existing Worker without an AppFactory ownership marker is never silently adopted;
+- AppFactory reuses its existing Cloudflare account token and Workers Builds token.
+
+This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.
