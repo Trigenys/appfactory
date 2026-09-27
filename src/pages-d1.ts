@@ -318,6 +318,7 @@ export async function provisionPagesD1(
     );
   }
 
+  assertCloudflareConfig(env);
   const projectName = repositoryName(repository);
   const databaseName = `${projectName}-leads`;
 
