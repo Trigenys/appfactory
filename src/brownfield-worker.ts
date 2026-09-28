@@ -760,11 +760,16 @@ async function buildFailureExcerpt(env: Env, buildUuid: string): Promise<string>
       .map((line) => line.map((part) => String(part)).join(" "))
       .filter(Boolean);
 
-    const useful = rendered.filter((line) =>
-      /error|fail|authentication|unauthori|permission|wrangler|deploy|token/i.test(line)
+    const explicitFailures = rendered.filter((line) =>
+      /(^|\s)(ERROR|ERR!|FAIL|FAILED|FATAL)(\s|:|\]|$)|exit code|exit status|command failed|script startup exceeded|authentication error|unauthorized|permission denied|too large|exceeded/i.test(line)
     );
-    const excerpt = (useful.length > 0 ? useful : rendered).slice(-12).join(" | ");
-    return excerpt.slice(0, 2400);
+
+    const tail = rendered.slice(-30);
+    const excerpt = [...explicitFailures.slice(-10), ...tail]
+      .filter((line, index, array) => array.indexOf(line) === index)
+      .join(" | ");
+
+    return excerpt.slice(-5000);
   } catch (error) {
     return `Build logs unavailable: ${error instanceof Error ? error.message : String(error)}`;
   }
