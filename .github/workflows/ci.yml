@@ -37,6 +37,8 @@ jobs:
         run: npm run test:cloudflare-build-token
       - name: Validate Workers Builds failure diagnostics
         run: npm run test:cloudflare-build-diagnostics
+      - name: Validate Python Worker packaging recipes
+        run: npm run test:python-worker-packaging
 
 
   android-blueprint:
