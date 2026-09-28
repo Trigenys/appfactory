@@ -9,7 +9,10 @@ test("migration gate exposes only a reviewed Alembic recipe", () => {
   assert.match(worker, /recipe: "python-alembic"/);
   assert.match(worker, /MIGRATION_RECIPE_FORBIDDEN/);
   assert.match(worker, /ALEMBIC_MIGRATION_COMMAND/);
-  assert.match(worker, /uv run alembic upgrade head/);
+  assert.match(worker, /MIGRATION_VENV="\$\(mktemp -d\)"/);
+  assert.match(worker, /uv venv --python 3\.13/);
+  assert.match(worker, /"\$MIGRATION_VENV\/bin\/alembic" upgrade head/);
+  assert.doesNotMatch(worker, /uv sync --group dev/);
   assert.doesNotMatch(worker, /migration\.command/);
 });
 
