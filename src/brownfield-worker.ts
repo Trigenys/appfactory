@@ -1,5 +1,14 @@
 import type { CloudflareApiResponse, Env, GitHubRepository } from "./types";
-import { managedDatabaseUrl } from "./hyperdrive";
+import {
+  managedDatabaseUrl,
+  managedHyperdriveEvidence,
+  type ManagedHyperdriveEvidence
+} from "./hyperdrive";
+import {
+  deploymentOnlyReadiness,
+  probeWorkerReadiness,
+  type WorkerReadinessEvidence
+} from "./worker-readiness";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
@@ -150,13 +159,20 @@ export interface BrownfieldWorkerResult {
     buildSecretConfigured: boolean;
     buildCompleted: boolean;
   };
+  release: {
+    state: WorkerReadinessEvidence["state"];
+    databaseRequired: boolean;
+    hyperdrive: ManagedHyperdriveEvidence;
+    readiness: WorkerReadinessEvidence;
+  };
 }
 
 export class BrownfieldWorkerProvisioningError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly requiredPermissions: string[] = []
+    readonly requiredPermissions: string[] = [],
+    readonly evidence?: Record<string, unknown>
   ) {
     super(message);
   }
@@ -1190,6 +1206,14 @@ export async function provisionBrownfieldWorker(
     migrationBuildSecretConfigured = true;
   }
 
+  const preBuildHyperdrive = await managedHyperdriveEvidence(
+    githubToken,
+    env,
+    repository,
+    request.workerName
+  );
+  const databaseRequired = preBuildHyperdrive.declared;
+
   const { build, reused } = await ensureBuild(
     env,
     script,
@@ -1198,9 +1222,58 @@ export async function provisionBrownfieldWorker(
     configCommitSha
   );
 
-  const completedBuild = request.migration
+  const completedBuild = request.migration || databaseRequired
     ? await waitForWorkerBuild(env, script.tag, build.build_uuid)
     : build;
+
+  const hyperdrive = databaseRequired
+    ? await managedHyperdriveEvidence(
+        githubToken,
+        env,
+        repository,
+        request.workerName
+      )
+    : preBuildHyperdrive;
+
+  if (databaseRequired && !hyperdrive.configured) {
+    const readiness = {
+      ...deploymentOnlyReadiness(),
+      state: "degraded" as const
+    };
+    throw new BrownfieldWorkerProvisioningError(
+      "HYPERDRIVE_BINDING_NOT_READY",
+      `Worker ${request.workerName} declares Hyperdrive binding ${hyperdrive.binding || "HYPERDRIVE"}, but Cloudflare does not report the expected binding after deployment.`,
+      [],
+      {
+        release: {
+          state: readiness.state,
+          databaseRequired,
+          hyperdrive,
+          readiness
+        }
+      }
+    );
+  }
+
+  const readiness = databaseRequired
+    ? await probeWorkerReadiness(workerUrl, true)
+    : deploymentOnlyReadiness();
+
+  if (databaseRequired && readiness.state !== "ready") {
+    throw new BrownfieldWorkerProvisioningError(
+      "WORKER_DATABASE_NOT_READY",
+      `Worker ${request.workerName} deployed but did not reach database-ready health. state=${readiness.state}; health=${readiness.healthStatus || "unknown"}; database_configured=${String(readiness.databaseConfigured)}.`,
+      [],
+      {
+        release: {
+          state: readiness.state,
+          databaseRequired,
+          hyperdrive,
+          readiness
+        }
+      }
+    );
+  }
 
   return {
     repository: repository.full_name,
@@ -1235,6 +1308,12 @@ export async function provisionBrownfieldWorker(
       databaseUrlEnv: request.migration?.databaseUrlEnv || null,
       buildSecretConfigured: migrationBuildSecretConfigured,
       buildCompleted: request.migration ? completedBuild.build_outcome === "success" : false
+    },
+    release: {
+      state: readiness.state,
+      databaseRequired,
+      hyperdrive,
+      readiness
     }
   };
 }

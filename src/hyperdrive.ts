@@ -111,6 +111,14 @@ export interface HyperdriveProvisioningResult {
   };
 }
 
+export interface ManagedHyperdriveEvidence {
+  declared: boolean;
+  binding: string | null;
+  id: string | null;
+  actualId: string | null;
+  configured: boolean;
+}
+
 export class HyperdriveProvisioningError extends Error {
   constructor(
     readonly code: string,
@@ -639,6 +647,61 @@ async function readHyperdriveMarker(
     );
   }
   return { marker, sha: file.sha };
+}
+
+export async function managedHyperdriveEvidence(
+  githubToken: string,
+  env: Env,
+  repository: GitHubRepository,
+  workerName: string
+): Promise<ManagedHyperdriveEvidence> {
+  const markerFile = await readHyperdriveMarker(githubToken, repository);
+  if (!markerFile) {
+    return {
+      declared: false,
+      binding: null,
+      id: null,
+      actualId: null,
+      configured: false
+    };
+  }
+
+  const marker = markerFile.marker;
+  if (
+    marker.schemaVersion !== SCHEMA_VERSION ||
+    marker.provider !== "cloudflare-hyperdrive" ||
+    marker.repository !== repository.full_name ||
+    marker.workerName !== workerName
+  ) {
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_MARKER_MISMATCH",
+      "Existing AppFactory Hyperdrive marker does not match the requested Worker."
+    );
+  }
+
+  const path =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID || "")}/workers/scripts/${encodeURIComponent(workerName)}/settings`;
+
+  let settings: WorkerSettings;
+  try {
+    settings = await cloudflareRequest<WorkerSettings>(env, path);
+  } catch (error) {
+    permissionError(error, "read Hyperdrive readiness binding", ["Workers Scripts Read"]);
+  }
+
+  const binding = (settings.bindings || []).find((item) => item.name === marker.binding);
+  const actualId = binding?.type === "hyperdrive" ? binding.id || null : null;
+
+  return {
+    declared: true,
+    binding: marker.binding,
+    id: marker.id,
+    actualId,
+    configured:
+      binding?.type === "hyperdrive" &&
+      Boolean(binding.id) &&
+      binding.id === marker.id
+  };
 }
 
 function validateExistingMarker(

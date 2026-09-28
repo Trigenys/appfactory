@@ -826,12 +826,16 @@ async function provisionExistingWorker(
         {
           error: error.code,
           message: error.message,
-          requiredPermissions: error.requiredPermissions
+          requiredPermissions: error.requiredPermissions,
+          ...(error.evidence ? { evidence: error.evidence } : {})
         },
         (error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED" ||
           error.code === "CLOUDFLARE_WORKERS_BUILD_FAILED" ||
           error.code === "CLOUDFLARE_WORKERS_BUILD_TIMEOUT")
           ? 502
+          : (error.code === "HYPERDRIVE_BINDING_NOT_READY" ||
+            error.code === "WORKER_DATABASE_NOT_READY")
+            ? 503
           : conflictCodes.has(error.code)
             ? 409
             : 400
