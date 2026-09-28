@@ -12,7 +12,8 @@
     "test:blueprint-upgrades": "node --test test/managed-blueprint-upgrades.test.mjs",
     "test:cloudflare-worker-bootstrap": "node --test test/cloudflare-worker-bootstrap.test.mjs",
     "test:cloudflare-credential-routing": "node --test test/cloudflare-credential-routing.test.mjs",
-    "test:cloudflare-build-token": "node --test test/cloudflare-build-token.test.mjs"
+    "test:cloudflare-build-token": "node --test test/cloudflare-build-token.test.mjs",
+    "test:cloudflare-build-diagnostics": "node --test test/cloudflare-build-diagnostics.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
