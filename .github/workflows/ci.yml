@@ -35,6 +35,8 @@ jobs:
         run: npm run test:cloudflare-credential-routing
       - name: Validate Workers Builds token refresh
         run: npm run test:cloudflare-build-token
+      - name: Validate Workers Builds failure diagnostics
+        run: npm run test:cloudflare-build-diagnostics
 
 
   android-blueprint:
