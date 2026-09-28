@@ -1,4 +1,5 @@
 import type { CloudflareApiResponse, Env, GitHubRepository } from "./types";
+import { managedDatabaseUrl } from "./hyperdrive";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
@@ -14,6 +15,8 @@ const RUNTIME_ONLY_BUILD_COMMAND =
   "bash scripts/package_worker.sh dry-run wrangler.production.toml ../worker-dist-production";
 const RUNTIME_ONLY_DEPLOY_COMMAND =
   "bash scripts/package_worker.sh deploy wrangler.production.toml";
+const ALEMBIC_MIGRATION_COMMAND =
+  'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" . "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" && "$MIGRATION_VENV/bin/alembic" upgrade head';
 
 interface WorkerScript {
   id: string;
@@ -85,11 +88,20 @@ interface WorkerMarker {
   rootDirectory: string;
   buildCommand: string;
   deployCommand: string;
+  migrationRecipe?: "python-alembic";
+  migrationProfile?: string;
+  databaseUrlEnv?: string;
 }
 
 export interface GeneratedWorkerSecret {
   name: string;
   kind: "token" | "fernet";
+}
+
+export interface WorkerMigrationGate {
+  recipe: "python-alembic";
+  profile?: string;
+  databaseUrlEnv?: string;
 }
 
 export interface BrownfieldWorkerRequest {
@@ -101,6 +113,7 @@ export interface BrownfieldWorkerRequest {
   runtimeSecrets?: Record<string, string>;
   generatedSecrets?: GeneratedWorkerSecret[];
   pagesProject?: string;
+  migration?: WorkerMigrationGate;
 }
 
 export interface BrownfieldWorkerResult {
@@ -128,6 +141,14 @@ export interface BrownfieldWorkerResult {
     upserted: string[];
     generated: string[];
     preserved: string[];
+  };
+  migration: {
+    enabled: boolean;
+    recipe: "python-alembic" | null;
+    profile: string | null;
+    databaseUrlEnv: string | null;
+    buildSecretConfigured: boolean;
+    buildCompleted: boolean;
   };
 }
 
@@ -339,10 +360,70 @@ function expectedWorkerName(repository: GitHubRepository): string {
   return `${repository.name}-api`.slice(0, 63);
 }
 
+function databaseSecretPrefix(repository: GitHubRepository): string {
+  return repository.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_") + "_";
+}
+
+function validateMigrationGate(
+  repository: GitHubRepository,
+  migration: WorkerMigrationGate | undefined
+): {
+  recipe: "python-alembic";
+  profile: string;
+  databaseUrlEnv: string;
+} | null {
+  if (!migration) return null;
+  if (migration.recipe !== "python-alembic") {
+    throw new BrownfieldWorkerProvisioningError(
+      "MIGRATION_RECIPE_FORBIDDEN",
+      "Managed Worker migrations must use the reviewed python-alembic recipe."
+    );
+  }
+
+  const profile = migration.profile || `${repository.name}-production`;
+  if (profile !== `${repository.name}-production`) {
+    throw new BrownfieldWorkerProvisioningError(
+      "MIGRATION_PROFILE_FORBIDDEN",
+      `Migration profile must be ${repository.name}-production.`
+    );
+  }
+
+  const databaseUrlEnv =
+    migration.databaseUrlEnv || `${databaseSecretPrefix(repository)}DATABASE_URL`;
+  if (databaseUrlEnv !== `${databaseSecretPrefix(repository)}DATABASE_URL`) {
+    throw new BrownfieldWorkerProvisioningError(
+      "MIGRATION_DATABASE_ENV_FORBIDDEN",
+      `Migration database URL variable must be ${databaseSecretPrefix(repository)}DATABASE_URL.`
+    );
+  }
+
+  return { recipe: "python-alembic", profile, databaseUrlEnv };
+}
+
+function migrationDeployCommand(
+  baseDeployCommand: string,
+  gate: ReturnType<typeof validateMigrationGate>
+): string {
+  if (!gate) return baseDeployCommand;
+  return `export ${gate.databaseUrlEnv}="$APPFACTORY_DATABASE_URL" && ${ALEMBIC_MIGRATION_COMMAND} && ${baseDeployCommand}`;
+}
+
+type ValidatedWorkerMigrationGate = {
+  recipe: "python-alembic";
+  profile: string;
+  databaseUrlEnv: string;
+};
+
+type ValidatedBrownfieldWorkerRequest =
+  Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
+  Omit<BrownfieldWorkerRequest, "migration"> & {
+    migration?: ValidatedWorkerMigrationGate;
+  };
+
 function validateRequest(
   repository: GitHubRepository,
   input: BrownfieldWorkerRequest
-): Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> & BrownfieldWorkerRequest {
+): ValidatedBrownfieldWorkerRequest {
   if (input.repository !== repository.full_name) {
     throw new BrownfieldWorkerProvisioningError(
       "REPOSITORY_MISMATCH",
@@ -380,7 +461,7 @@ function validateRequest(
     );
   }
 
-  const secretPrefix = repository.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_") + "_";
+  const secretPrefix = databaseSecretPrefix(repository);
   for (const name of Object.keys(input.runtimeSecrets || {})) {
     if (!name.startsWith(secretPrefix)) {
       throw new BrownfieldWorkerProvisioningError(
@@ -398,13 +479,17 @@ function validateRequest(
     }
   }
 
+  const migration = validateMigrationGate(repository, input.migration);
+  const { migration: _unvalidatedMigration, ...baseInput } = input;
+
   return {
-    ...input,
+    ...baseInput,
     repository: input.repository,
     workerName,
     rootDirectory,
     buildCommand,
-    deployCommand
+    deployCommand,
+    ...(migration ? { migration } : {})
   };
 }
 
@@ -702,6 +787,61 @@ async function ensureProductionTrigger(
   }
 }
 
+async function configureMigrationBuildSecret(
+  env: Env,
+  triggerUuid: string,
+  databaseUrl: string
+): Promise<void> {
+  assertCloudflareConfig(env);
+  try {
+    await cloudflareRequest<unknown>(
+      env,
+      `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/triggers/${encodeURIComponent(triggerUuid)}/environment_variables`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          APPFACTORY_DATABASE_URL: {
+            value: databaseUrl,
+            is_secret: true
+          }
+        })
+      }
+    );
+  } catch (error) {
+    permissionError(error, "configure the migration database build secret", [
+      "Workers Builds Configuration Edit"
+    ]);
+  }
+}
+
+async function waitForWorkerBuild(
+  env: Env,
+  workerTag: string,
+  buildUuid: string
+): Promise<WorkerBuild> {
+  const terminal = new Set(["success", "fail", "cancelled", "terminated"]);
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    const builds = await listWorkerBuilds(env, workerTag);
+    const build = builds.find((item) => item.build_uuid === buildUuid);
+    if (build && terminal.has(build.build_outcome || "")) {
+      if (build.build_outcome !== "success") {
+        const excerpt = await buildFailureExcerpt(env, build.build_uuid);
+        throw new BrownfieldWorkerProvisioningError(
+          "CLOUDFLARE_WORKERS_BUILD_FAILED",
+          `Cloudflare Workers Build ${build.build_uuid} failed the release gate. ${excerpt}`
+        );
+      }
+      return build;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  throw new BrownfieldWorkerProvisioningError(
+    "CLOUDFLARE_WORKERS_BUILD_TIMEOUT",
+    `Cloudflare Workers Build ${buildUuid} did not reach a terminal state within 3 minutes.`
+  );
+}
+
 async function listWorkerBuilds(env: Env, workerTag: string): Promise<WorkerBuild[]> {
   assertCloudflareConfig(env);
   try {
@@ -955,7 +1095,12 @@ export async function provisionBrownfieldWorker(
     workerName: request.workerName,
     rootDirectory: request.rootDirectory,
     buildCommand: request.buildCommand,
-    deployCommand: request.deployCommand
+    deployCommand: request.deployCommand,
+    ...(request.migration ? {
+      migrationRecipe: request.migration.recipe,
+      migrationProfile: request.migration.profile,
+      databaseUrlEnv: request.migration.databaseUrlEnv
+    } : {})
   };
 
   if (
@@ -978,7 +1123,10 @@ export async function provisionBrownfieldWorker(
     marker &&
     (
       marker.buildCommand !== expectedMarker.buildCommand ||
-      marker.deployCommand !== expectedMarker.deployCommand
+      marker.deployCommand !== expectedMarker.deployCommand ||
+      marker.migrationRecipe !== expectedMarker.migrationRecipe ||
+      marker.migrationProfile !== expectedMarker.migrationProfile ||
+      marker.databaseUrlEnv !== expectedMarker.databaseUrlEnv
     )
   );
 
@@ -1031,9 +1179,16 @@ export async function provisionBrownfieldWorker(
     {
       rootDirectory: request.rootDirectory,
       buildCommand: request.buildCommand,
-      deployCommand: request.deployCommand
+      deployCommand: migrationDeployCommand(request.deployCommand, request.migration || null)
     }
   );
+
+  let migrationBuildSecretConfigured = false;
+  if (request.migration) {
+    const databaseUrl = managedDatabaseUrl(env, request.migration.profile);
+    await configureMigrationBuildSecret(env, trigger.trigger_uuid, databaseUrl);
+    migrationBuildSecretConfigured = true;
+  }
 
   const { build, reused } = await ensureBuild(
     env,
@@ -1042,6 +1197,10 @@ export async function provisionBrownfieldWorker(
     repository.default_branch || "main",
     configCommitSha
   );
+
+  const completedBuild = request.migration
+    ? await waitForWorkerBuild(env, script.tag, build.build_uuid)
+    : build;
 
   return {
     repository: repository.full_name,
@@ -1060,14 +1219,22 @@ export async function provisionBrownfieldWorker(
       repositoryConnectionUuid: connection.repo_connection_uuid,
       triggerUuid: trigger.trigger_uuid,
       triggerCreated,
-      buildUuid: build.build_uuid,
-      buildOutcome: build.build_outcome || null,
+      buildUuid: completedBuild.build_uuid,
+      buildOutcome: completedBuild.build_outcome || null,
       reused
     },
     secrets: {
       upserted: upserted.sort(),
       generated: generated.sort(),
       preserved: preserved.sort()
+    },
+    migration: {
+      enabled: Boolean(request.migration),
+      recipe: request.migration?.recipe || null,
+      profile: request.migration?.profile || null,
+      databaseUrlEnv: request.migration?.databaseUrlEnv || null,
+      buildSecretConfigured: migrationBuildSecretConfigured,
+      buildCompleted: request.migration ? completedBuild.build_outcome === "success" : false
     }
   };
 }

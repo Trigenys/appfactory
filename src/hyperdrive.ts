@@ -431,6 +431,21 @@ function validateProfile(name: string, profile: HyperdriveProfile | undefined): 
   return profile;
 }
 
+function encodeDatabaseComponent(value: string): string {
+  return encodeURIComponent(value);
+}
+
+export function managedDatabaseUrl(env: Env, profileName: string): string {
+  const profiles = parseProfiles(env);
+  const profile = validateProfile(profileName, profiles[profileName]);
+  const origin = profile.origin;
+  const scheme = origin.scheme === "mysql" ? "mysql+pymysql" : "postgresql+psycopg";
+  const port = origin.port ?? (origin.scheme === "mysql" ? 3306 : 5432);
+
+  return `${scheme}://${encodeDatabaseComponent(origin.user)}:${encodeDatabaseComponent(origin.password)}@${origin.host}:${port}/${encodeDatabaseComponent(origin.database)}`;
+}
+
+
 async function assertManagedWorker(
   githubToken: string,
   env: Env,
