@@ -716,7 +716,8 @@ async function provisionExistingWorker(
           message: error.message,
           requiredPermissions: error.requiredPermissions
         },
-        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+        (error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED" ||
+          error.code === "CLOUDFLARE_WORKERS_BUILD_FAILED")
           ? 502
           : conflictCodes.has(error.code)
             ? 409
