@@ -14,7 +14,8 @@
     "test:cloudflare-credential-routing": "node --test test/cloudflare-credential-routing.test.mjs",
     "test:cloudflare-build-token": "node --test test/cloudflare-build-token.test.mjs",
     "test:cloudflare-build-diagnostics": "node --test test/cloudflare-build-diagnostics.test.mjs",
-    "test:python-worker-packaging": "node --test test/python-worker-packaging.test.mjs"
+    "test:python-worker-packaging": "node --test test/python-worker-packaging.test.mjs",
+    "test:ci-impact": "node --test test/ci-impact.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
