@@ -480,9 +480,10 @@ function validateRequest(
   }
 
   const migration = validateMigrationGate(repository, input.migration);
+  const { migration: _unvalidatedMigration, ...baseInput } = input;
 
   return {
-    ...input,
+    ...baseInput,
     repository: input.repository,
     workerName,
     rootDirectory,
