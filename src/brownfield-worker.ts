@@ -965,16 +965,22 @@ export async function provisionBrownfieldWorker(
       marker.provider !== expectedMarker.provider ||
       marker.repository !== expectedMarker.repository ||
       marker.workerName !== expectedMarker.workerName ||
-      marker.rootDirectory !== expectedMarker.rootDirectory ||
-      marker.buildCommand !== expectedMarker.buildCommand ||
-      marker.deployCommand !== expectedMarker.deployCommand
+      marker.rootDirectory !== expectedMarker.rootDirectory
     )
   ) {
     throw new BrownfieldWorkerProvisioningError(
       "INFRASTRUCTURE_MARKER_MISMATCH",
-      "Existing AppFactory Worker marker does not match the requested infrastructure."
+      "Existing AppFactory Worker marker does not match the requested infrastructure identity."
     );
   }
+
+  const recipeChanged = Boolean(
+    marker &&
+    (
+      marker.buildCommand !== expectedMarker.buildCommand ||
+      marker.deployCommand !== expectedMarker.deployCommand
+    )
+  );
 
   const { script, created } = await ensureWorker(env, request.workerName, marker);
   const subdomain = await workerSubdomain(env);
@@ -1010,9 +1016,11 @@ export async function provisionBrownfieldWorker(
     existingSecretNames.add(spec.name);
   }
 
-  const configCommitSha = marker
-    ? await headSha(githubToken, repository)
-    : await writeMarker(githubToken, repository, expectedMarker);
+  const configCommitSha = !marker
+    ? await writeMarker(githubToken, repository, expectedMarker)
+    : recipeChanged
+      ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
+      : await headSha(githubToken, repository);
 
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
