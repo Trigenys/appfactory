@@ -16,7 +16,8 @@
     "test:cloudflare-build-diagnostics": "node --test test/cloudflare-build-diagnostics.test.mjs",
     "test:python-worker-packaging": "node --test test/python-worker-packaging.test.mjs",
     "test:ci-impact": "node --test test/ci-impact.test.mjs",
-    "test:hyperdrive-provisioning": "node --test test/hyperdrive-provisioning.test.mjs"
+    "test:hyperdrive-provisioning": "node --test test/hyperdrive-provisioning.test.mjs",
+    "test:database-migration-gate": "node --test test/database-migration-gate.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",

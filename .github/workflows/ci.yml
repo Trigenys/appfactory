@@ -108,6 +108,8 @@ jobs:
         run: npm run test:ci-impact
       - name: Validate Hyperdrive provisioning contract
         run: npm run test:hyperdrive-provisioning
+      - name: Validate database migration release gate
+        run: npm run test:database-migration-gate
 
   android-blueprint:
     needs: impact

@@ -1,4 +1,11 @@
 import type { CloudflareApiResponse, Env, GitHubRepository } from "./types";
+import {
+  DatabaseMigrationGateError,
+  PYTHON_ALEMBIC_BUILD_COMMAND,
+  PYTHON_ALEMBIC_DEPLOY_COMMAND,
+  PYTHON_ALEMBIC_MIGRATION_RECIPE,
+  configureDatabaseMigrationGate
+} from "./database-migration";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
@@ -85,6 +92,7 @@ interface WorkerMarker {
   rootDirectory: string;
   buildCommand: string;
   deployCommand: string;
+  migrationRecipe?: string;
 }
 
 export interface GeneratedWorkerSecret {
@@ -101,6 +109,7 @@ export interface BrownfieldWorkerRequest {
   runtimeSecrets?: Record<string, string>;
   generatedSecrets?: GeneratedWorkerSecret[];
   pagesProject?: string;
+  migrationRecipe?: string;
 }
 
 export interface BrownfieldWorkerResult {
@@ -128,6 +137,12 @@ export interface BrownfieldWorkerResult {
     upserted: string[];
     generated: string[];
     preserved: string[];
+  };
+  migration: {
+    configured: boolean;
+    recipe: string | null;
+    profile: string | null;
+    buildSecret: string | null;
   };
 }
 
@@ -366,18 +381,45 @@ function validateRequest(
     );
   }
 
-  const buildCommand = input.buildCommand || LEGACY_BUILD_COMMAND;
-  const deployCommand = input.deployCommand || LEGACY_DEPLOY_COMMAND;
-
-  const allowedRecipes = new Set([
-    `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
-    `${RUNTIME_ONLY_BUILD_COMMAND}\n${RUNTIME_ONLY_DEPLOY_COMMAND}`
-  ]);
-  if (!allowedRecipes.has(`${buildCommand}\n${deployCommand}`)) {
+  const migrationRecipe = input.migrationRecipe?.trim() || undefined;
+  if (
+    migrationRecipe &&
+    migrationRecipe !== PYTHON_ALEMBIC_MIGRATION_RECIPE
+  ) {
     throw new BrownfieldWorkerProvisioningError(
-      "BUILD_COMMAND_FORBIDDEN",
-      "Brownfield Worker commands must use one reviewed Python Worker deployment recipe without mixing build and deploy commands."
+      "MIGRATION_RECIPE_FORBIDDEN",
+      `Unsupported database migration recipe: ${migrationRecipe}`
     );
+  }
+
+  const buildCommand = migrationRecipe
+    ? input.buildCommand || PYTHON_ALEMBIC_BUILD_COMMAND
+    : input.buildCommand || LEGACY_BUILD_COMMAND;
+  const deployCommand = migrationRecipe
+    ? input.deployCommand || PYTHON_ALEMBIC_DEPLOY_COMMAND
+    : input.deployCommand || LEGACY_DEPLOY_COMMAND;
+
+  if (migrationRecipe) {
+    if (
+      buildCommand !== PYTHON_ALEMBIC_BUILD_COMMAND ||
+      deployCommand !== PYTHON_ALEMBIC_DEPLOY_COMMAND
+    ) {
+      throw new BrownfieldWorkerProvisioningError(
+        "MIGRATION_BUILD_COMMAND_FORBIDDEN",
+        "Database migration releases must use the reviewed AppFactory Alembic build/deploy recipe."
+      );
+    }
+  } else {
+    const allowedRecipes = new Set([
+      `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
+      `${RUNTIME_ONLY_BUILD_COMMAND}\n${RUNTIME_ONLY_DEPLOY_COMMAND}`
+    ]);
+    if (!allowedRecipes.has(`${buildCommand}\n${deployCommand}`)) {
+      throw new BrownfieldWorkerProvisioningError(
+        "BUILD_COMMAND_FORBIDDEN",
+        "Brownfield Worker commands must use one reviewed Python Worker deployment recipe without mixing build and deploy commands."
+      );
+    }
   }
 
   const secretPrefix = repository.name.toUpperCase().replace(/[^A-Z0-9]+/g, "_") + "_";
@@ -404,7 +446,8 @@ function validateRequest(
     workerName,
     rootDirectory,
     buildCommand,
-    deployCommand
+    deployCommand,
+    migrationRecipe
   };
 }
 
@@ -780,7 +823,8 @@ async function ensureBuild(
   worker: WorkerScript,
   trigger: BuildTrigger,
   branch: string,
-  commitSha: string
+  commitSha: string,
+  retryFailed = false
 ): Promise<{ build: WorkerBuild; reused: boolean }> {
   const builds = await listWorkerBuilds(env, worker.tag);
   const existing = builds.find((build) =>
@@ -794,7 +838,7 @@ async function ensureBuild(
     build.build_outcome === "fail" &&
     buildMatchesCurrentTrigger(build, trigger, branch, commitSha)
   );
-  if (failedCurrentBuild) {
+  if (failedCurrentBuild && !retryFailed) {
     const excerpt = await buildFailureExcerpt(env, failedCurrentBuild.build_uuid);
     throw new BrownfieldWorkerProvisioningError(
       "CLOUDFLARE_WORKERS_BUILD_FAILED",
@@ -955,7 +999,8 @@ export async function provisionBrownfieldWorker(
     workerName: request.workerName,
     rootDirectory: request.rootDirectory,
     buildCommand: request.buildCommand,
-    deployCommand: request.deployCommand
+    deployCommand: request.deployCommand,
+    ...(request.migrationRecipe ? { migrationRecipe: request.migrationRecipe } : {})
   };
 
   if (
@@ -978,9 +1023,17 @@ export async function provisionBrownfieldWorker(
     marker &&
     (
       marker.buildCommand !== expectedMarker.buildCommand ||
-      marker.deployCommand !== expectedMarker.deployCommand
+      marker.deployCommand !== expectedMarker.deployCommand ||
+      marker.migrationRecipe !== expectedMarker.migrationRecipe
     )
   );
+
+  if (request.migrationRecipe && !marker) {
+    throw new BrownfieldWorkerProvisioningError(
+      "MIGRATION_REQUIRES_MANAGED_WORKER",
+      "Enable database migration gating only after the Worker has been claimed by AppFactory and Hyperdrive has been provisioned."
+    );
+  }
 
   const { script, created } = await ensureWorker(env, request.workerName, marker);
   const subdomain = await workerSubdomain(env);
@@ -1016,12 +1069,6 @@ export async function provisionBrownfieldWorker(
     existingSecretNames.add(spec.name);
   }
 
-  const configCommitSha = !marker
-    ? await writeMarker(githubToken, repository, expectedMarker)
-    : recipeChanged
-      ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
-      : await headSha(githubToken, repository);
-
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
     env,
@@ -1035,12 +1082,44 @@ export async function provisionBrownfieldWorker(
     }
   );
 
+  let migration: Awaited<ReturnType<typeof configureDatabaseMigrationGate>> | null = null;
+  if (request.migrationRecipe) {
+    try {
+      migration = await configureDatabaseMigrationGate(
+        githubToken,
+        env,
+        repository,
+        trigger.trigger_uuid,
+        request.migrationRecipe
+      );
+    } catch (error) {
+      if (error instanceof DatabaseMigrationGateError) {
+        throw new BrownfieldWorkerProvisioningError(
+          error.code,
+          error.message,
+          error.requiredPermissions
+        );
+      }
+      throw error;
+    }
+  }
+
+  // Configure the trigger and migration secrets before writing the marker.
+  // The marker commit itself can trigger Workers Builds, so ordering it last
+  // prevents a release from racing with stale build settings.
+  const configCommitSha = !marker
+    ? await writeMarker(githubToken, repository, expectedMarker)
+    : recipeChanged
+      ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
+      : await headSha(githubToken, repository);
+
   const { build, reused } = await ensureBuild(
     env,
     script,
     trigger,
     repository.default_branch || "main",
-    configCommitSha
+    configCommitSha,
+    Boolean(migration)
   );
 
   return {
@@ -1068,6 +1147,12 @@ export async function provisionBrownfieldWorker(
       upserted: upserted.sort(),
       generated: generated.sort(),
       preserved: preserved.sort()
+    },
+    migration: {
+      configured: Boolean(migration?.configured),
+      recipe: migration?.recipe || null,
+      profile: migration?.profile || null,
+      buildSecret: migration?.buildSecret || null
     }
   };
 }
