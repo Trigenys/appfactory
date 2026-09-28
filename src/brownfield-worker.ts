@@ -49,7 +49,17 @@ interface WorkerBuild {
   build_trigger_metadata?: {
     commit_hash?: string;
     branch?: string;
+    build_token_uuid?: string;
+    build_command?: string;
+    deploy_command?: string;
+    root_directory?: string;
   };
+}
+
+interface WorkerBuildLogs {
+  cursor?: string;
+  lines?: Array<Array<number | string>>;
+  truncated?: boolean;
 }
 
 interface GitHubFile {
@@ -699,6 +709,67 @@ async function listWorkerBuilds(env: Env, workerTag: string): Promise<WorkerBuil
   }
 }
 
+function buildMatchesCurrentTrigger(
+  build: WorkerBuild,
+  trigger: BuildTrigger,
+  branch: string,
+  commitSha: string
+): boolean {
+  const metadata = build.build_trigger_metadata;
+  if (
+    metadata?.commit_hash !== commitSha ||
+    metadata?.branch !== branch ||
+    !trigger.build_token_uuid ||
+    metadata.build_token_uuid !== trigger.build_token_uuid
+  ) {
+    return false;
+  }
+
+  if (
+    metadata.build_command &&
+    trigger.build_command &&
+    metadata.build_command !== trigger.build_command
+  ) {
+    return false;
+  }
+  if (
+    metadata.deploy_command &&
+    trigger.deploy_command &&
+    metadata.deploy_command !== trigger.deploy_command
+  ) {
+    return false;
+  }
+  if (
+    metadata.root_directory &&
+    trigger.root_directory &&
+    metadata.root_directory !== trigger.root_directory
+  ) {
+    return false;
+  }
+  return true;
+}
+
+async function buildFailureExcerpt(env: Env, buildUuid: string): Promise<string> {
+  assertCloudflareConfig(env);
+  try {
+    const logs = await cloudflareRequest<WorkerBuildLogs>(
+      env,
+      `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/builds/${encodeURIComponent(buildUuid)}/logs`
+    );
+    const rendered = (logs.lines || [])
+      .map((line) => line.map((part) => String(part)).join(" "))
+      .filter(Boolean);
+
+    const useful = rendered.filter((line) =>
+      /error|fail|authentication|unauthori|permission|wrangler|deploy|token/i.test(line)
+    );
+    const excerpt = (useful.length > 0 ? useful : rendered).slice(-12).join(" | ");
+    return excerpt.slice(0, 2400);
+  } catch (error) {
+    return `Build logs unavailable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 async function ensureBuild(
   env: Env,
   worker: WorkerScript,
@@ -713,6 +784,18 @@ async function ensureBuild(
     !["fail", "cancelled", "terminated"].includes(build.build_outcome || "")
   );
   if (existing) return { build: existing, reused: true };
+
+  const failedCurrentBuild = builds.find((build) =>
+    build.build_outcome === "fail" &&
+    buildMatchesCurrentTrigger(build, trigger, branch, commitSha)
+  );
+  if (failedCurrentBuild) {
+    const excerpt = await buildFailureExcerpt(env, failedCurrentBuild.build_uuid);
+    throw new BrownfieldWorkerProvisioningError(
+      "CLOUDFLARE_WORKERS_BUILD_FAILED",
+      `Cloudflare Workers Build ${failedCurrentBuild.build_uuid} failed before deployment. ${excerpt}`
+    );
+  }
 
   assertCloudflareConfig(env);
   try {
