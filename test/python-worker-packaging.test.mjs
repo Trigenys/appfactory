@@ -21,3 +21,10 @@ test("build and deploy commands must come from the same reviewed recipe", () => 
   assert.match(source, /RUNTIME_ONLY_BUILD_COMMAND.*RUNTIME_ONLY_DEPLOY_COMMAND/s);
   assert.match(source, /without mixing build and deploy commands/);
 });
+
+test("reviewed packaging recipe changes update the marker instead of changing Worker identity", () => {
+  assert.match(source, /const recipeChanged = Boolean/);
+  assert.match(source, /marker\.buildCommand !== expectedMarker\.buildCommand/);
+  assert.match(source, /marker\.deployCommand !== expectedMarker\.deployCommand/);
+  assert.match(source, /recipeChanged[\s\S]*?writeMarker\(githubToken, repository, expectedMarker, markerFile\?\.sha\)/);
+});
