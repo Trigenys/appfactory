@@ -16,7 +16,7 @@ const RUNTIME_ONLY_BUILD_COMMAND =
 const RUNTIME_ONLY_DEPLOY_COMMAND =
   "bash scripts/package_worker.sh deploy wrangler.production.toml";
 const ALEMBIC_MIGRATION_COMMAND =
-  'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && uv sync --group dev --no-install-project && uv run alembic upgrade head';
+  'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" . "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" && "$MIGRATION_VENV/bin/alembic" upgrade head';
 
 interface WorkerScript {
   id: string;
