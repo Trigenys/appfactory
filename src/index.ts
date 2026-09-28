@@ -34,6 +34,11 @@ import {
   provisionPagesD1,
   type PagesD1Request
 } from "./pages-d1";
+import {
+  HyperdriveProvisioningError,
+  provisionHyperdrive,
+  type HyperdriveProvisioningRequest
+} from "./hyperdrive";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
 type ProjectInputResult =
@@ -59,7 +64,8 @@ function runtimeConfig(env: Env) {
       apiToken: Boolean(env.CLOUDFLARE_API_TOKEN),
       buildsApiToken: Boolean(env.CLOUDFLARE_API_TOKEN),
       resourceApiToken: Boolean(env.CLOUDFLARE_PAGES_D1_TOKEN),
-      resourceApiTokenFallback: !env.CLOUDFLARE_PAGES_D1_TOKEN && Boolean(env.CLOUDFLARE_API_TOKEN)
+      resourceApiTokenFallback: !env.CLOUDFLARE_PAGES_D1_TOKEN && Boolean(env.CLOUDFLARE_API_TOKEN),
+      hyperdriveDatabaseProfiles: Boolean(env.HYPERDRIVE_DATABASE_PROFILES)
     },
     engines: {
       native: { configured: true },
@@ -641,6 +647,109 @@ async function provisionExistingPagesD1(
   }
 }
 
+async function provisionExistingHyperdrive(
+  request: Request,
+  env: Env,
+  claims: GitHubOidcClaims
+): Promise<Response> {
+  if (!claims.repository) {
+    return json(
+      {
+        error: "OIDC_REPOSITORY_REQUIRED",
+        message: "GitHub OIDC token does not identify a repository."
+      },
+      403
+    );
+  }
+
+  let payload: HyperdriveProvisioningRequest;
+  try {
+    payload = await request.json() as HyperdriveProvisioningRequest;
+  } catch {
+    return json(
+      {
+        error: "INVALID_JSON",
+        message: "Request body must contain valid JSON."
+      },
+      400
+    );
+  }
+
+  if (!payload || typeof payload !== "object" || typeof payload.repository !== "string") {
+    return json(
+      {
+        error: "INVALID_INFRASTRUCTURE_REQUEST",
+        message: "Hyperdrive request must identify its repository."
+      },
+      400
+    );
+  }
+
+  try {
+    const token = await getInstallationToken(env);
+    const result = await provisionHyperdrive(
+      token,
+      env,
+      claims.repository,
+      payload
+    );
+    return json(
+      {
+        status: "PROVISIONED",
+        infrastructure: result
+      },
+      200
+    );
+  } catch (error) {
+    console.error(
+      "Hyperdrive provisioning failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
+
+    if (error instanceof HyperdriveProvisioningError) {
+      const conflictCodes = new Set([
+        "REPOSITORY_MISMATCH",
+        "WORKER_NAME_FORBIDDEN",
+        "DATABASE_PROFILE_FORBIDDEN",
+        "HYPERDRIVE_NAME_FORBIDDEN",
+        "HYPERDRIVE_BINDING_FORBIDDEN",
+        "BROWNFIELD_WORKER_UNCLAIMED",
+        "INFRASTRUCTURE_MARKER_MISMATCH",
+        "HYPERDRIVE_MARKER_MISMATCH",
+        "BROWNFIELD_HYPERDRIVE_UNCLAIMED",
+        "HYPERDRIVE_NAME_AMBIGUOUS",
+        "HYPERDRIVE_BINDING_CONFLICT"
+      ]);
+
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+          ? 502
+          : conflictCodes.has(error.code)
+            ? 409
+            : 400
+      );
+    }
+
+    return json(
+      {
+        error: "HYPERDRIVE_PROVISIONING_FAILED",
+        message:
+          env.ENVIRONMENT === "production"
+            ? "Hyperdrive provisioning failed. Check AppFactory logs for details."
+            : error instanceof Error
+              ? error.message
+              : "Hyperdrive provisioning failed."
+      },
+      500
+    );
+  }
+}
+
 async function provisionExistingWorker(
   request: Request,
   env: Env,
@@ -790,7 +899,11 @@ export default {
 
     if (
       request.method === "POST" &&
-      (url.pathname === "/infrastructure/worker" || url.pathname === "/infrastructure/pages-d1")
+      (
+        url.pathname === "/infrastructure/worker" ||
+        url.pathname === "/infrastructure/pages-d1" ||
+        url.pathname === "/infrastructure/hyperdrive"
+      )
     ) {
       try {
         infrastructureClaims = await authenticateInfrastructureMutation(request, env);
@@ -830,6 +943,14 @@ export default {
       infrastructureClaims
     ) {
       return provisionExistingPagesD1(request, env, infrastructureClaims);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/infrastructure/hyperdrive" &&
+      infrastructureClaims
+    ) {
+      return provisionExistingHyperdrive(request, env, infrastructureClaims);
     }
 
     if (
