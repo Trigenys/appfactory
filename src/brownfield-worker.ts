@@ -823,7 +823,8 @@ async function ensureBuild(
   worker: WorkerScript,
   trigger: BuildTrigger,
   branch: string,
-  commitSha: string
+  commitSha: string,
+  retryFailed = false
 ): Promise<{ build: WorkerBuild; reused: boolean }> {
   const builds = await listWorkerBuilds(env, worker.tag);
   const existing = builds.find((build) =>
@@ -837,7 +838,7 @@ async function ensureBuild(
     build.build_outcome === "fail" &&
     buildMatchesCurrentTrigger(build, trigger, branch, commitSha)
   );
-  if (failedCurrentBuild) {
+  if (failedCurrentBuild && !retryFailed) {
     const excerpt = await buildFailureExcerpt(env, failedCurrentBuild.build_uuid);
     throw new BrownfieldWorkerProvisioningError(
       "CLOUDFLARE_WORKERS_BUILD_FAILED",
@@ -1117,7 +1118,8 @@ export async function provisionBrownfieldWorker(
     script,
     trigger,
     repository.default_branch || "main",
-    configCommitSha
+    configCommitSha,
+    Boolean(migration)
   );
 
   return {
