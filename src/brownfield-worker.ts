@@ -408,10 +408,22 @@ function migrationDeployCommand(
   return `export ${gate.databaseUrlEnv}="$APPFACTORY_DATABASE_URL" && ${ALEMBIC_MIGRATION_COMMAND} && ${baseDeployCommand}`;
 }
 
+type ValidatedWorkerMigrationGate = {
+  recipe: "python-alembic";
+  profile: string;
+  databaseUrlEnv: string;
+};
+
+type ValidatedBrownfieldWorkerRequest =
+  Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
+  Omit<BrownfieldWorkerRequest, "migration"> & {
+    migration?: ValidatedWorkerMigrationGate;
+  };
+
 function validateRequest(
   repository: GitHubRepository,
   input: BrownfieldWorkerRequest
-): Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> & BrownfieldWorkerRequest {
+): ValidatedBrownfieldWorkerRequest {
   if (input.repository !== repository.full_name) {
     throw new BrownfieldWorkerProvisioningError(
       "REPOSITORY_MISMATCH",
