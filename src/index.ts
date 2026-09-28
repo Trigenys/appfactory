@@ -815,6 +815,9 @@ async function provisionExistingWorker(
         "WORKER_NAME_FORBIDDEN",
         "ROOT_DIRECTORY_FORBIDDEN",
         "BUILD_COMMAND_FORBIDDEN",
+        "MIGRATION_RECIPE_FORBIDDEN",
+        "MIGRATION_PROFILE_FORBIDDEN",
+        "MIGRATION_DATABASE_ENV_FORBIDDEN",
         "SECRET_NAME_FORBIDDEN",
         "INFRASTRUCTURE_MARKER_MISMATCH",
         "BROWNFIELD_WORKER_UNCLAIMED"
@@ -826,7 +829,8 @@ async function provisionExistingWorker(
           requiredPermissions: error.requiredPermissions
         },
         (error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED" ||
-          error.code === "CLOUDFLARE_WORKERS_BUILD_FAILED")
+          error.code === "CLOUDFLARE_WORKERS_BUILD_FAILED" ||
+          error.code === "CLOUDFLARE_WORKERS_BUILD_TIMEOUT")
           ? 502
           : conflictCodes.has(error.code)
             ? 409
