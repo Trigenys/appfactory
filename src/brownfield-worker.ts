@@ -6,6 +6,15 @@ const GITHUB_API_VERSION = "2022-11-28";
 const MARKER_PATH = ".appfactory/worker-infrastructure.json";
 const SCHEMA_VERSION = 1;
 
+const LEGACY_BUILD_COMMAND =
+  "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --dry-run";
+const LEGACY_DEPLOY_COMMAND =
+  "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --keep-vars";
+const RUNTIME_ONLY_BUILD_COMMAND =
+  "bash scripts/package_worker.sh dry-run wrangler.production.toml ../worker-dist-production";
+const RUNTIME_ONLY_DEPLOY_COMMAND =
+  "bash scripts/package_worker.sh deploy wrangler.production.toml";
+
 interface WorkerScript {
   id: string;
   tag: string;
@@ -357,21 +366,17 @@ function validateRequest(
     );
   }
 
-  const buildCommand =
-    input.buildCommand ||
-    "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --dry-run";
-  const deployCommand =
-    input.deployCommand ||
-    "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --keep-vars";
+  const buildCommand = input.buildCommand || LEGACY_BUILD_COMMAND;
+  const deployCommand = input.deployCommand || LEGACY_DEPLOY_COMMAND;
 
-  const allowedCommands = new Set([
-    "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --dry-run",
-    "python -m pip install --user uv && uvx --from workers-py pywrangler deploy --config wrangler.production.toml --keep-vars"
+  const allowedRecipes = new Set([
+    `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
+    `${RUNTIME_ONLY_BUILD_COMMAND}\n${RUNTIME_ONLY_DEPLOY_COMMAND}`
   ]);
-  if (!allowedCommands.has(buildCommand) || !allowedCommands.has(deployCommand)) {
+  if (!allowedRecipes.has(`${buildCommand}\n${deployCommand}`)) {
     throw new BrownfieldWorkerProvisioningError(
       "BUILD_COMMAND_FORBIDDEN",
-      "Brownfield Worker commands must use the reviewed Python Worker deployment recipe."
+      "Brownfield Worker commands must use one reviewed Python Worker deployment recipe without mixing build and deploy commands."
     );
   }
 
@@ -960,16 +965,22 @@ export async function provisionBrownfieldWorker(
       marker.provider !== expectedMarker.provider ||
       marker.repository !== expectedMarker.repository ||
       marker.workerName !== expectedMarker.workerName ||
-      marker.rootDirectory !== expectedMarker.rootDirectory ||
-      marker.buildCommand !== expectedMarker.buildCommand ||
-      marker.deployCommand !== expectedMarker.deployCommand
+      marker.rootDirectory !== expectedMarker.rootDirectory
     )
   ) {
     throw new BrownfieldWorkerProvisioningError(
       "INFRASTRUCTURE_MARKER_MISMATCH",
-      "Existing AppFactory Worker marker does not match the requested infrastructure."
+      "Existing AppFactory Worker marker does not match the requested infrastructure identity."
     );
   }
+
+  const recipeChanged = Boolean(
+    marker &&
+    (
+      marker.buildCommand !== expectedMarker.buildCommand ||
+      marker.deployCommand !== expectedMarker.deployCommand
+    )
+  );
 
   const { script, created } = await ensureWorker(env, request.workerName, marker);
   const subdomain = await workerSubdomain(env);
@@ -1005,9 +1016,11 @@ export async function provisionBrownfieldWorker(
     existingSecretNames.add(spec.name);
   }
 
-  const configCommitSha = marker
-    ? await headSha(githubToken, repository)
-    : await writeMarker(githubToken, repository, expectedMarker);
+  const configCommitSha = !marker
+    ? await writeMarker(githubToken, repository, expectedMarker)
+    : recipeChanged
+      ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
+      : await headSha(githubToken, repository);
 
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
