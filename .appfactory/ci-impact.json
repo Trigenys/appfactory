@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "description": "RAIDER change-impact routing for AppFactory CI.",
+  "forceAll": {
+    "files": [
+      ".github/workflows/ci.yml",
+      ".appfactory/ci-impact.json",
+      "scripts/ci-impact.mjs",
+      "package.json",
+      "package-lock.json",
+      "tsconfig.json"
+    ],
+    "prefixes": []
+  },
+  "ignore": {
+    "files": [
+      "README.md"
+    ],
+    "prefixes": [
+      "docs/",
+      ".appfactory/requests/"
+    ]
+  },
+  "gates": {
+    "core": {
+      "files": [
+        "wrangler.jsonc",
+        ".github/workflows/provision-project.yml"
+      ],
+      "prefixes": [
+        "src/",
+        "test/",
+        "blueprints/entitlements/"
+      ]
+    },
+    "android": {
+      "files": [
+        "src/mobile-provisioning.ts"
+      ],
+      "prefixes": [
+        "blueprints/android-compose/"
+      ]
+    },
+    "desktop": {
+      "files": [
+        "src/desktop-provisioning.ts"
+      ],
+      "prefixes": [
+        "blueprints/tauri-react/"
+      ]
+    },
+    "webapp": {
+      "files": [
+        "src/webapp-provisioning.ts"
+      ],
+      "prefixes": [
+        "blueprints/react-vite/"
+      ]
+    }
+  },
+  "fallbackGate": "core"
+}
