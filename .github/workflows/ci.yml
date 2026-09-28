@@ -110,6 +110,8 @@ jobs:
         run: npm run test:hyperdrive-provisioning
       - name: Validate Worker migration release gate
         run: npm run test:worker-migration-gate
+      - name: Validate Worker database readiness gate
+        run: npm run test:worker-readiness-gate
 
   android-blueprint:
     needs: impact
