@@ -133,7 +133,6 @@ class CloudflareApiError extends Error {
 
 function assertCloudflareConfig(env: Env): asserts env is Env & {
   CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_API_TOKEN: string;
 } {
   if (!env.CLOUDFLARE_ACCOUNT_ID) {
     throw new HyperdriveProvisioningError(
@@ -156,6 +155,12 @@ async function cloudflareRequest<T>(
 ): Promise<T> {
   assertCloudflareConfig(env);
   const apiToken = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
+  if (!apiToken) {
+    throw new HyperdriveProvisioningError(
+      "CLOUDFLARE_RESOURCE_TOKEN_REQUIRED",
+      "AppFactory runtime is missing a Cloudflare resource API token."
+    );
+  }
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${apiToken}`);
   if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
