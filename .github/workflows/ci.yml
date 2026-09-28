@@ -9,16 +9,81 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  impact:
+    name: impact
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.classify.outputs.core }}
+      android: ${{ steps.classify.outputs.android }}
+      desktop: ${{ steps.classify.outputs.desktop }}
+      webapp: ${{ steps.classify.outputs.webapp }}
+      any: ${{ steps.classify.outputs.any }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve changed files
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          changed_file_list="$RUNNER_TEMP/appfactory-changed-files.txt"
+          : > "$changed_file_list"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            base_sha="$PR_BASE_SHA"
+            head_sha="$PR_HEAD_SHA"
+          else
+            base_sha="$BEFORE_SHA"
+            head_sha="$GITHUB_SHA"
+          fi
+
+          if [[ -z "$head_sha" ]]; then
+            head_sha="$GITHUB_SHA"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            git show --pretty="" --name-only "$head_sha" | sed '/^$/d' | sort -u > "$changed_file_list"
+          else
+            git diff --name-only --diff-filter=ACDMRT "$base_sha" "$head_sha" | sed '/^$/d' | sort -u > "$changed_file_list"
+          fi
+
+          echo "Changed files:"
+          cat "$changed_file_list"
+          echo "path=$changed_file_list" >> "$GITHUB_OUTPUT"
+
+      - name: Classify CI impact
+        id: classify
+        run: |
+          node scripts/ci-impact.mjs \
+            --files-file "${{ steps.changes.outputs.path }}" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
   typecheck:
+    needs: impact
+    if: needs.impact.outputs.core == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
       - name: Install dependencies
         run: npm install
       - name: Typecheck AppFactory
@@ -39,13 +104,16 @@ jobs:
         run: npm run test:cloudflare-build-diagnostics
       - name: Validate Python Worker packaging recipes
         run: npm run test:python-worker-packaging
-
+      - name: Validate impact-aware CI routing
+        run: npm run test:ci-impact
 
   android-blueprint:
+    needs: impact
+    if: needs.impact.outputs.android == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -58,14 +126,15 @@ jobs:
       - name: Validate Android Compose blueprint
         run: gradle -p blueprints/android-compose :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
 
-
   desktop-blueprint:
+    needs: impact
+    if: needs.impact.outputs.desktop == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
       - name: Validate desktop frontend
@@ -80,14 +149,15 @@ jobs:
       - name: Check desktop native crate
         run: cargo check --manifest-path blueprints/tauri-react/src-tauri/Cargo.toml
 
-
   webapp-blueprint:
+    needs: impact
+    if: needs.impact.outputs.webapp == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
       - name: Validate React/Vite webapp blueprint
