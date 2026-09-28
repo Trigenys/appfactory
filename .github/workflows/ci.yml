@@ -106,6 +106,8 @@ jobs:
         run: npm run test:python-worker-packaging
       - name: Validate impact-aware CI routing
         run: npm run test:ci-impact
+      - name: Validate Hyperdrive provisioning contract
+        run: npm run test:hyperdrive-provisioning
 
   android-blueprint:
     needs: impact
