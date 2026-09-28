@@ -20,6 +20,17 @@ interface RepositoryConnection {
   repo_connection_uuid: string;
 }
 
+interface BuildToken {
+  build_token_uuid: string;
+  build_token_name?: string;
+  cloudflare_token_id?: string;
+}
+
+interface TokenVerification {
+  id: string;
+  status: "active" | "disabled" | "expired";
+}
+
 interface BuildTrigger {
   trigger_uuid: string;
   build_token_uuid?: string;
@@ -145,7 +156,10 @@ async function cloudflareRequest<T>(
   init: RequestInit = {}
 ): Promise<T> {
   assertCloudflareConfig(env);
-  const isBuildsApi = path.includes("/builds/") || path.endsWith("/builds");
+  const isBuildsApi =
+    path.includes("/builds/") ||
+    path.endsWith("/builds") ||
+    path === "/user/tokens/verify";
   const apiToken = isBuildsApi
     ? env.CLOUDFLARE_API_TOKEN
     : env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
@@ -534,29 +548,64 @@ async function listTriggers(env: Env, workerTag: string): Promise<BuildTrigger[]
 async function resolveBuildTokenUuid(env: Env): Promise<string> {
   if (env.CLOUDFLARE_BUILD_TOKEN_UUID?.trim()) return env.CLOUDFLARE_BUILD_TOKEN_UUID.trim();
 
-  const sourceWorkerName = env.CLOUDFLARE_BUILD_TOKEN_SOURCE_WORKER || "appfactory-api";
-  const sourceWorker = (await listWorkerScripts(env)).find((item) => item.id === sourceWorkerName);
-  if (sourceWorker?.tag) {
-    const triggers = await listTriggers(env, sourceWorker.tag);
-    const reusable = triggers.find((trigger) => Boolean(trigger.build_token_uuid));
-    if (reusable?.build_token_uuid) return reusable.build_token_uuid;
+  assertCloudflareConfig(env);
+
+  let verification: TokenVerification;
+  try {
+    verification = await cloudflareRequest<TokenVerification>(env, "/user/tokens/verify");
+  } catch (error) {
+    permissionError(error, "verify the Workers Builds API token", [
+      "Workers Builds Configuration Edit"
+    ]);
   }
 
-  assertCloudflareConfig(env);
+  if (verification.status !== "active") {
+    throw new BrownfieldWorkerProvisioningError(
+      "CLOUDFLARE_BUILD_API_TOKEN_INACTIVE",
+      `The AppFactory Workers Builds API token is ${verification.status}; replace CLOUDFLARE_API_TOKEN with an active user-scoped token.`
+    );
+  }
+
+  let tokens: BuildToken[];
   try {
-    const tokens = await cloudflareRequest<Array<{ build_token_uuid: string }>>(
+    tokens = await cloudflareRequest<BuildToken[]>(
       env,
       `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/tokens`
     );
-    if (tokens.length === 1 && tokens[0].build_token_uuid) return tokens[0].build_token_uuid;
   } catch (error) {
-    permissionError(error, "read Workers Builds tokens", ["Workers Builds Configuration Edit"]);
+    permissionError(error, "read Workers Builds tokens", [
+      "Workers Builds Configuration Edit"
+    ]);
   }
 
-  throw new BrownfieldWorkerProvisioningError(
-    "CLOUDFLARE_BUILD_TOKEN_AMBIGUOUS",
-    "AppFactory could not select the existing Workers Builds token. Configure CLOUDFLARE_BUILD_TOKEN_UUID on AppFactory instead of creating a repository credential."
+  const registered = tokens.find((token) =>
+    token.cloudflare_token_id === verification.id && Boolean(token.build_token_uuid)
   );
+  if (registered?.build_token_uuid) return registered.build_token_uuid;
+
+  try {
+    const created = await cloudflareRequest<BuildToken>(
+      env,
+      `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/tokens`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          build_token_name: "AppFactory Workers Builds",
+          build_token_secret: env.CLOUDFLARE_API_TOKEN,
+          cloudflare_token_id: verification.id
+        })
+      }
+    );
+    if (!created.build_token_uuid) {
+      throw new Error("Cloudflare created a build token without returning its UUID.");
+    }
+    return created.build_token_uuid;
+  } catch (error) {
+    permissionError(error, "register the current API token as a Workers build token", [
+      "Workers Builds Configuration Edit",
+      "Workers CI Edit (legacy UI, if Cloudflare requires it for build-token registration)"
+    ]);
+  }
 }
 
 async function ensureProductionTrigger(
@@ -570,6 +619,7 @@ async function ensureProductionTrigger(
     deployCommand: string;
   }
 ): Promise<{ trigger: BuildTrigger; created: boolean }> {
+  const buildTokenUuid = await resolveBuildTokenUuid(env);
   const triggers = await listTriggers(env, worker.tag);
   const existing = triggers.find((trigger) =>
     trigger.repo_connection?.repo_connection_uuid === connection.repo_connection_uuid &&
@@ -578,6 +628,7 @@ async function ensureProductionTrigger(
 
   if (existing) {
     const needsUpdate =
+      existing.build_token_uuid !== buildTokenUuid ||
       existing.root_directory !== config.rootDirectory ||
       existing.build_command !== config.buildCommand ||
       existing.deploy_command !== config.deployCommand;
@@ -592,6 +643,7 @@ async function ensureProductionTrigger(
         {
           method: "PATCH",
           body: JSON.stringify({
+            build_token_uuid: buildTokenUuid,
             root_directory: config.rootDirectory,
             build_command: config.buildCommand,
             deploy_command: config.deployCommand,
@@ -606,7 +658,6 @@ async function ensureProductionTrigger(
     }
   }
 
-  const buildTokenUuid = await resolveBuildTokenUuid(env);
   assertCloudflareConfig(env);
   try {
     const trigger = await cloudflareRequest<BuildTrigger>(
