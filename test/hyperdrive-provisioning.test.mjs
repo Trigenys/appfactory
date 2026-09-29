@@ -33,6 +33,15 @@ test("Worker binding preserves unrelated bindings through inheritance", () => {
   assert.match(source, /Workers Scripts Write/);
 });
 
+test("Worker settings binding updates use Cloudflare multipart form contract", () => {
+  assert.match(source, /const form = new FormData\(\)/);
+  assert.match(source, /form\.append\(\s*"settings"/s);
+  assert.match(source, /JSON\.stringify\(\{ bindings: desiredBindings \}\)/);
+  assert.match(source, /type: "application\/json"/);
+  assert.match(source, /method: "PATCH",[\s\S]*?body: form/s);
+  assert.match(source, /if \(!\(init\.body instanceof FormData\) && !headers\.has\("Content-Type"\)\)/);
+});
+
 test("Hyperdrive provisioning requires an AppFactory-managed Worker and ownership marker", () => {
   assert.match(source, /WORKER_MARKER_PATH = "\.appfactory\/worker-infrastructure\.json"/);
   assert.match(source, /HYPERDRIVE_MARKER_PATH = "\.appfactory\/hyperdrive\.json"/);
