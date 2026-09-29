@@ -104,6 +104,7 @@ export interface HyperdriveProvisioningResult {
   binding: {
     name: string;
     configured: boolean;
+    deferredToDeploy: boolean;
   };
   marker: {
     path: string;
@@ -963,28 +964,6 @@ export async function provisionHyperdrive(
     markerFile?.marker || null
   );
 
-  let bindingConfigured = false;
-  try {
-    bindingConfigured = await ensureWorkerBinding(
-      env,
-      request.workerName,
-      request.binding,
-      config.id
-    );
-  } catch (error) {
-    if (created) {
-      try {
-        await deleteHyperdrive(env, config.id);
-      } catch (rollbackError) {
-        throw new HyperdriveProvisioningError(
-          "HYPERDRIVE_BINDING_ROLLBACK_FAILED",
-          `Hyperdrive ${request.hyperdriveName} was created, but binding failed and the new configuration could not be removed. Original error: ${error instanceof Error ? error.message : String(error)}. Rollback error: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
-        );
-      }
-    }
-    throw error;
-  }
-
   const expectedMarker: HyperdriveMarker = {
     schemaVersion: SCHEMA_VERSION,
     provider: "cloudflare-hyperdrive",
@@ -1019,7 +998,8 @@ export async function provisionHyperdrive(
     },
     binding: {
       name: request.binding,
-      configured: bindingConfigured
+      configured: false,
+      deferredToDeploy: true
     },
     marker: {
       path: HYPERDRIVE_MARKER_PATH,
