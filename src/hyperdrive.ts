@@ -704,6 +704,57 @@ export async function managedHyperdriveEvidence(
   };
 }
 
+export async function reconcileManagedHyperdriveBinding(
+  githubToken: string,
+  env: Env,
+  repository: GitHubRepository,
+  workerName: string
+): Promise<{ evidence: ManagedHyperdriveEvidence; changed: boolean }> {
+  const markerFile = await readHyperdriveMarker(githubToken, repository);
+  if (!markerFile) {
+    return {
+      evidence: {
+        declared: false,
+        binding: null,
+        id: null,
+        actualId: null,
+        configured: false
+      },
+      changed: false
+    };
+  }
+
+  const marker = markerFile.marker;
+  if (
+    marker.schemaVersion !== SCHEMA_VERSION ||
+    marker.provider !== "cloudflare-hyperdrive" ||
+    marker.repository !== repository.full_name ||
+    marker.workerName !== workerName
+  ) {
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_MARKER_MISMATCH",
+      "Existing AppFactory Hyperdrive marker does not match the requested Worker."
+    );
+  }
+
+  const changed = await ensureWorkerBinding(
+    env,
+    workerName,
+    marker.binding,
+    marker.id
+  );
+
+  return {
+    evidence: await managedHyperdriveEvidence(
+      githubToken,
+      env,
+      repository,
+      workerName
+    ),
+    changed
+  };
+}
+
 function validateExistingMarker(
   marker: HyperdriveMarker,
   request: Required<HyperdriveProvisioningRequest>
