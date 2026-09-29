@@ -895,14 +895,19 @@ async function ensureWorkerBinding(
     }
   ];
 
+  const form = new FormData();
+  form.append(
+    "settings",
+    new Blob(
+      [JSON.stringify({ bindings: desiredBindings })],
+      { type: "application/json" }
+    )
+  );
+
   try {
     await cloudflareRequest<WorkerSettings>(env, path, {
       method: "PATCH",
-      body: JSON.stringify({
-        settings: {
-          bindings: desiredBindings
-        }
-      })
+      body: form
     });
   } catch (error) {
     permissionError(error, "attach Hyperdrive to the managed Worker", [
