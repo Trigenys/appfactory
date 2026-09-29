@@ -156,21 +156,13 @@ function assertCloudflareConfig(env: Env): asserts env is Env & {
   }
 }
 
-async function cloudflareRequest<T>(
-  env: Env,
+async function cloudflareRequestWithToken<T>(
+  token: string,
   path: string,
-  init: RequestInit = {}
+  init: RequestInit
 ): Promise<T> {
-  assertCloudflareConfig(env);
-  const apiToken = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
-  if (!apiToken) {
-    throw new HyperdriveProvisioningError(
-      "CLOUDFLARE_RESOURCE_TOKEN_REQUIRED",
-      "AppFactory runtime is missing a Cloudflare resource API token."
-    );
-  }
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${apiToken}`);
+  headers.set("Authorization", `Bearer ${token}`);
   if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -195,6 +187,38 @@ async function cloudflareRequest<T>(
   }
 
   return payload.result;
+}
+
+async function cloudflareRequest<T>(
+  env: Env,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  assertCloudflareConfig(env);
+
+  const preferredToken = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
+  if (!preferredToken) {
+    throw new HyperdriveProvisioningError(
+      "CLOUDFLARE_RESOURCE_TOKEN_REQUIRED",
+      "AppFactory runtime is missing a Cloudflare resource API token."
+    );
+  }
+
+  try {
+    return await cloudflareRequestWithToken<T>(preferredToken, path, init);
+  } catch (error) {
+    const fallbackToken = env.CLOUDFLARE_API_TOKEN;
+    const canRetryWithFallback =
+      error instanceof CloudflareApiError &&
+      (error.status === 401 || error.status === 403) &&
+      Boolean(env.CLOUDFLARE_PAGES_D1_TOKEN) &&
+      Boolean(fallbackToken) &&
+      fallbackToken !== preferredToken;
+
+    if (!canRetryWithFallback || !fallbackToken) throw error;
+
+    return cloudflareRequestWithToken<T>(fallbackToken, path, init);
+  }
 }
 
 function permissionError(
