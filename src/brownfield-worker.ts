@@ -2,7 +2,7 @@ import type { CloudflareApiResponse, Env, GitHubRepository } from "./types";
 import {
   managedDatabaseUrl,
   managedHyperdriveEvidence,
-  reconcileManagedHyperdriveBinding,
+  verifyManagedHyperdriveBinding,
   type ManagedHyperdriveEvidence
 } from "./hyperdrive";
 import {
@@ -1268,16 +1268,14 @@ export async function provisionBrownfieldWorker(
     ? await waitForWorkerBuild(env, script.tag, build.build_uuid)
     : build;
 
-  const reconciledHyperdrive = databaseRequired
-    ? await reconcileManagedHyperdriveBinding(
+  const hyperdrive = databaseRequired
+    ? await verifyManagedHyperdriveBinding(
         githubToken,
         env,
         repository,
         request.workerName
       )
-    : { evidence: preBuildHyperdrive, changed: false };
-
-  const hyperdrive = reconciledHyperdrive.evidence;
+    : preBuildHyperdrive;
 
   if (databaseRequired && !hyperdrive.configured) {
     const readiness = {
@@ -1286,14 +1284,14 @@ export async function provisionBrownfieldWorker(
     };
     throw new BrownfieldWorkerProvisioningError(
       "HYPERDRIVE_BINDING_NOT_READY",
-      `Worker ${request.workerName} declares Hyperdrive binding ${hyperdrive.binding || "HYPERDRIVE"}, but Cloudflare does not report the expected binding after reconciliation.`,
+      `Worker ${request.workerName} declares Hyperdrive binding ${hyperdrive.binding || "HYPERDRIVE"}, but the release deploy did not produce the expected binding identity.`,
       [],
       {
         release: {
           state: readiness.state,
           databaseRequired,
           hyperdrive,
-          hyperdriveReconciled: reconciledHyperdrive.changed,
+          hyperdriveReconciled: false,
           readiness
         }
       }
@@ -1314,7 +1312,7 @@ export async function provisionBrownfieldWorker(
           state: readiness.state,
           databaseRequired,
           hyperdrive,
-          hyperdriveReconciled: reconciledHyperdrive.changed,
+          hyperdriveReconciled: false,
           readiness
         }
       }
@@ -1359,7 +1357,7 @@ export async function provisionBrownfieldWorker(
       state: readiness.state,
       databaseRequired,
       hyperdrive,
-      hyperdriveReconciled: reconciledHyperdrive.changed,
+      hyperdriveReconciled: false,
       readiness
     }
   };
