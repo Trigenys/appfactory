@@ -52,3 +52,12 @@ test("OIDC infrastructure router exposes Hyperdrive provisioning", () => {
   assert.match(index, /provisionExistingHyperdrive/);
   assert.match(index, /provisionHyperdrive/);
 });
+
+test("Hyperdrive resource auth falls back only after preferred-token auth failure", () => {
+  assert.match(source, /const preferredToken = env\.CLOUDFLARE_PAGES_D1_TOKEN \|\| env\.CLOUDFLARE_API_TOKEN/);
+  assert.match(source, /error instanceof CloudflareApiError/);
+  assert.match(source, /error\.status === 401 \|\| error\.status === 403/);
+  assert.match(source, /fallbackToken !== preferredToken/);
+  assert.match(source, /cloudflareRequestWithToken<T>\(fallbackToken, path, init\)/);
+});
+
