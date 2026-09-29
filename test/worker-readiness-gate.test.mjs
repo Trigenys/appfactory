@@ -21,12 +21,15 @@ test("database-less Workers are not forced through the readiness gate", () => {
   assert.match(worker, /deploymentOnlyReadiness/);
 });
 
-test("managed Hyperdrive identity is verified after Worker deployment", () => {
+test("managed Hyperdrive identity is reconciled and verified after Worker deployment", () => {
   assert.match(hyperdrive, /export async function managedHyperdriveEvidence/);
+  assert.match(hyperdrive, /export async function reconcileManagedHyperdriveBinding/);
+  assert.match(hyperdrive, /await ensureWorkerBinding/);
   assert.match(hyperdrive, /actualId/);
   assert.match(hyperdrive, /binding\.id === marker\.id/);
   assert.match(worker, /HYPERDRIVE_BINDING_NOT_READY/);
-  assert.match(worker, /await managedHyperdriveEvidence[\s\S]*?completedBuild[\s\S]*?managedHyperdriveEvidence/s);
+  assert.match(worker, /completedBuild[\s\S]*?reconcileManagedHyperdriveBinding/s);
+  assert.match(worker, /hyperdriveReconciled/);
 });
 
 test("database-backed Worker cannot finish ready while health is degraded", () => {
