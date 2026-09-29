@@ -426,6 +426,42 @@ function migrationDeployCommand(
   return `export ${gate.databaseUrlEnv}="$APPFACTORY_DATABASE_URL" && ${ALEMBIC_MIGRATION_COMMAND} && ${baseDeployCommand}`;
 }
 
+function hyperdriveDeployCommand(
+  baseDeployCommand: string,
+  hyperdrive: ManagedHyperdriveEvidence
+): string {
+  if (!hyperdrive.declared) return baseDeployCommand;
+  if (
+    hyperdrive.binding !== "HYPERDRIVE" ||
+    !hyperdrive.id ||
+    !/^[A-Za-z0-9-]+$/.test(hyperdrive.id)
+  ) {
+    throw new BrownfieldWorkerProvisioningError(
+      "HYPERDRIVE_DEPLOY_BINDING_INVALID",
+      "Managed Hyperdrive marker is missing a safe HYPERDRIVE binding identity."
+    );
+  }
+
+  const rewrittenDeployCommand = baseDeployCommand.replace(
+    "wrangler.production.toml",
+    '"$APPFACTORY_WRANGLER_CONFIG"'
+  );
+  if (rewrittenDeployCommand === baseDeployCommand) {
+    throw new BrownfieldWorkerProvisioningError(
+      "HYPERDRIVE_DEPLOY_RECIPE_UNSUPPORTED",
+      "Managed Hyperdrive binding requires the reviewed Wrangler production config recipe."
+    );
+  }
+
+  const bindingToml = `\\n[[hyperdrive]]\\nbinding = "${hyperdrive.binding}"\\nid = "${hyperdrive.id}"\\n`;
+  return [
+    'APPFACTORY_WRANGLER_CONFIG="$(mktemp .appfactory-wrangler.XXXXXX.toml)"',
+    'cp wrangler.production.toml "$APPFACTORY_WRANGLER_CONFIG"',
+    `printf '%b' '${bindingToml}' >> "$APPFACTORY_WRANGLER_CONFIG"`,
+    `( trap 'rm -f "$APPFACTORY_WRANGLER_CONFIG"' EXIT; ${rewrittenDeployCommand} )`
+  ].join(" && ");
+}
+
 type ValidatedWorkerMigrationGate = {
   recipe: "python-alembic";
   profile: string;
@@ -1188,6 +1224,18 @@ export async function provisionBrownfieldWorker(
       ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
       : await headSha(githubToken, repository);
 
+  const preBuildHyperdrive = await managedHyperdriveEvidence(
+    githubToken,
+    env,
+    repository,
+    request.workerName
+  );
+  const databaseRequired = preBuildHyperdrive.declared;
+  const releaseDeployCommand = migrationDeployCommand(
+    hyperdriveDeployCommand(request.deployCommand, preBuildHyperdrive),
+    request.migration || null
+  );
+
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
     env,
@@ -1197,7 +1245,7 @@ export async function provisionBrownfieldWorker(
     {
       rootDirectory: request.rootDirectory,
       buildCommand: request.buildCommand,
-      deployCommand: migrationDeployCommand(request.deployCommand, request.migration || null)
+      deployCommand: releaseDeployCommand
     }
   );
 
@@ -1207,14 +1255,6 @@ export async function provisionBrownfieldWorker(
     await configureMigrationBuildSecret(env, trigger.trigger_uuid, databaseUrl);
     migrationBuildSecretConfigured = true;
   }
-
-  const preBuildHyperdrive = await managedHyperdriveEvidence(
-    githubToken,
-    env,
-    repository,
-    request.workerName
-  );
-  const databaseRequired = preBuildHyperdrive.declared;
 
   const { build, reused } = await ensureBuild(
     env,
