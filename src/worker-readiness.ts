@@ -8,6 +8,8 @@ export interface WorkerReadinessEvidence {
   runtime: string | null;
   databaseConfigured: boolean | null;
   attempts: number;
+  httpStatus: number | null;
+  probeError: string | null;
 }
 
 interface HealthPayload {
@@ -24,11 +26,17 @@ function asBoolean(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+function probeErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/g, " ").trim().slice(0, 240) || "unknown probe error";
+}
+
 export function classifyWorkerHealth(
   payload: HealthPayload,
   databaseRequired: boolean,
   endpoint: string,
-  attempts: number
+  attempts: number,
+  httpStatus: number | null = null
 ): WorkerReadinessEvidence {
   const healthStatus = asString(payload.status);
   const runtime = asString(payload.runtime);
@@ -45,7 +53,9 @@ export function classifyWorkerHealth(
       healthStatus,
       runtime,
       databaseConfigured,
-      attempts
+      attempts,
+      httpStatus,
+      probeError: null
     };
   }
 
@@ -56,7 +66,9 @@ export function classifyWorkerHealth(
     healthStatus,
     runtime,
     databaseConfigured,
-    attempts
+    attempts,
+    httpStatus,
+    probeError: null
   };
 }
 
@@ -68,13 +80,17 @@ export function deploymentOnlyReadiness(): WorkerReadinessEvidence {
     healthStatus: null,
     runtime: null,
     databaseConfigured: null,
-    attempts: 0
+    attempts: 0,
+    httpStatus: null,
+    probeError: null
   };
 }
 
 function deployedAfterFailedProbe(
   endpoint: string,
-  attempts: number
+  attempts: number,
+  httpStatus: number | null = null,
+  probeError: string | null = null
 ): WorkerReadinessEvidence {
   return {
     state: "deployed",
@@ -83,7 +99,9 @@ function deployedAfterFailedProbe(
     healthStatus: null,
     runtime: null,
     databaseConfigured: null,
-    attempts
+    attempts,
+    httpStatus,
+    probeError
   };
 }
 
@@ -106,20 +124,41 @@ export async function probeWorkerReadiness(
         headers: { Accept: "application/json" }
       });
       const text = await response.text();
-      if (text) {
-        const payload = JSON.parse(text) as HealthPayload;
-        lastEvidence = classifyWorkerHealth(
-          payload,
-          databaseRequired,
+
+      if (!text) {
+        lastEvidence = deployedAfterFailedProbe(
           endpoint,
-          attempt
+          attempt,
+          response.status,
+          `empty health response (HTTP ${response.status})`
         );
-        if (lastEvidence.state === "ready") return lastEvidence;
       } else {
-        lastEvidence = deployedAfterFailedProbe(endpoint, attempt);
+        try {
+          const payload = JSON.parse(text) as HealthPayload;
+          lastEvidence = classifyWorkerHealth(
+            payload,
+            databaseRequired,
+            endpoint,
+            attempt,
+            response.status
+          );
+          if (lastEvidence.state === "ready") return lastEvidence;
+        } catch (error) {
+          lastEvidence = deployedAfterFailedProbe(
+            endpoint,
+            attempt,
+            response.status,
+            `invalid health JSON: ${probeErrorMessage(error)}`
+          );
+        }
       }
-    } catch {
-      lastEvidence = deployedAfterFailedProbe(endpoint, attempt);
+    } catch (error) {
+      lastEvidence = deployedAfterFailedProbe(
+        endpoint,
+        attempt,
+        null,
+        probeErrorMessage(error)
+      );
     }
 
     if (attempt < maxAttempts) {

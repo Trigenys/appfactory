@@ -1326,7 +1326,7 @@ export async function provisionBrownfieldWorker(
   if (databaseRequired && readiness.state !== "ready") {
     throw new BrownfieldWorkerProvisioningError(
       "WORKER_DATABASE_NOT_READY",
-      `Worker ${request.workerName} deployed but did not reach database-ready health. state=${readiness.state}; health=${readiness.healthStatus || "unknown"}; database_configured=${String(readiness.databaseConfigured)}.`,
+      `Worker ${request.workerName} deployed but did not reach database-ready health. state=${readiness.state}; health=${readiness.healthStatus || "unknown"}; database_configured=${String(readiness.databaseConfigured)}; probe_http=${readiness.httpStatus ?? "unknown"}; probe_error=${readiness.probeError || "none"}.`,
       [],
       {
         release: {
