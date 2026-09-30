@@ -34,11 +34,11 @@ test("migration runs before deploy and blocks release on failure", () => {
 });
 
 test("Workers Builds polling stays inside the free-plan subrequest budget", () => {
-  assert.match(worker, /WORKER_BUILD_POLL_INTERVAL_MS = 15_000/);
+  assert.match(worker, /WORKER_BUILD_POLL_INTERVAL_MS = 60_000/);
   assert.match(worker, /WORKER_BUILD_MAX_POLLS = 12/);
   assert.match(worker, /attempt < WORKER_BUILD_MAX_POLLS/);
   assert.match(worker, /setTimeout\(resolve, WORKER_BUILD_POLL_INTERVAL_MS\)/);
-  assert.doesNotMatch(worker, /attempt < 90/);
+  assert.doesNotMatch(worker, /attempt < 90/);\n  assert.match(worker, /within 12 minutes/);
 });
 
 test("complex release commands are passed through Workers Builds environment variables", () => {
