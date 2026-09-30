@@ -2,7 +2,7 @@ import type { CloudflareApiResponse, Env, GitHubRepository } from "./types";
 import {
   managedDatabaseUrl,
   managedHyperdriveEvidence,
-  reconcileManagedHyperdriveBinding,
+  verifyManagedHyperdriveBinding,
   type ManagedHyperdriveEvidence
 } from "./hyperdrive";
 import {
@@ -424,6 +424,42 @@ function migrationDeployCommand(
 ): string {
   if (!gate) return baseDeployCommand;
   return `export ${gate.databaseUrlEnv}="$APPFACTORY_DATABASE_URL" && ${ALEMBIC_MIGRATION_COMMAND} && ${baseDeployCommand}`;
+}
+
+function hyperdriveDeployCommand(
+  baseDeployCommand: string,
+  hyperdrive: ManagedHyperdriveEvidence
+): string {
+  if (!hyperdrive.declared) return baseDeployCommand;
+  if (
+    hyperdrive.binding !== "HYPERDRIVE" ||
+    !hyperdrive.id ||
+    !/^[A-Za-z0-9-]+$/.test(hyperdrive.id)
+  ) {
+    throw new BrownfieldWorkerProvisioningError(
+      "HYPERDRIVE_DEPLOY_BINDING_INVALID",
+      "Managed Hyperdrive marker is missing a safe HYPERDRIVE binding identity."
+    );
+  }
+
+  const rewrittenDeployCommand = baseDeployCommand.replace(
+    "wrangler.production.toml",
+    '"$APPFACTORY_WRANGLER_CONFIG"'
+  );
+  if (rewrittenDeployCommand === baseDeployCommand) {
+    throw new BrownfieldWorkerProvisioningError(
+      "HYPERDRIVE_DEPLOY_RECIPE_UNSUPPORTED",
+      "Managed Hyperdrive binding requires the reviewed Wrangler production config recipe."
+    );
+  }
+
+  const bindingToml = `\\n[[hyperdrive]]\\nbinding = "${hyperdrive.binding}"\\nid = "${hyperdrive.id}"\\n`;
+  return [
+    'APPFACTORY_WRANGLER_CONFIG="$(mktemp .appfactory-wrangler.XXXXXX.toml)"',
+    'cp wrangler.production.toml "$APPFACTORY_WRANGLER_CONFIG"',
+    `printf '%b' '${bindingToml}' >> "$APPFACTORY_WRANGLER_CONFIG"`,
+    `( trap 'rm -f "$APPFACTORY_WRANGLER_CONFIG"' EXIT; ${rewrittenDeployCommand} )`
+  ].join(" && ");
 }
 
 type ValidatedWorkerMigrationGate = {
@@ -1188,6 +1224,18 @@ export async function provisionBrownfieldWorker(
       ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
       : await headSha(githubToken, repository);
 
+  const preBuildHyperdrive = await managedHyperdriveEvidence(
+    githubToken,
+    env,
+    repository,
+    request.workerName
+  );
+  const databaseRequired = preBuildHyperdrive.declared;
+  const releaseDeployCommand = migrationDeployCommand(
+    hyperdriveDeployCommand(request.deployCommand, preBuildHyperdrive),
+    request.migration || null
+  );
+
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
     env,
@@ -1197,7 +1245,7 @@ export async function provisionBrownfieldWorker(
     {
       rootDirectory: request.rootDirectory,
       buildCommand: request.buildCommand,
-      deployCommand: migrationDeployCommand(request.deployCommand, request.migration || null)
+      deployCommand: releaseDeployCommand
     }
   );
 
@@ -1207,14 +1255,6 @@ export async function provisionBrownfieldWorker(
     await configureMigrationBuildSecret(env, trigger.trigger_uuid, databaseUrl);
     migrationBuildSecretConfigured = true;
   }
-
-  const preBuildHyperdrive = await managedHyperdriveEvidence(
-    githubToken,
-    env,
-    repository,
-    request.workerName
-  );
-  const databaseRequired = preBuildHyperdrive.declared;
 
   const { build, reused } = await ensureBuild(
     env,
@@ -1228,16 +1268,14 @@ export async function provisionBrownfieldWorker(
     ? await waitForWorkerBuild(env, script.tag, build.build_uuid)
     : build;
 
-  const reconciledHyperdrive = databaseRequired
-    ? await reconcileManagedHyperdriveBinding(
+  const hyperdrive = databaseRequired
+    ? await verifyManagedHyperdriveBinding(
         githubToken,
         env,
         repository,
         request.workerName
       )
-    : { evidence: preBuildHyperdrive, changed: false };
-
-  const hyperdrive = reconciledHyperdrive.evidence;
+    : preBuildHyperdrive;
 
   if (databaseRequired && !hyperdrive.configured) {
     const readiness = {
@@ -1246,14 +1284,14 @@ export async function provisionBrownfieldWorker(
     };
     throw new BrownfieldWorkerProvisioningError(
       "HYPERDRIVE_BINDING_NOT_READY",
-      `Worker ${request.workerName} declares Hyperdrive binding ${hyperdrive.binding || "HYPERDRIVE"}, but Cloudflare does not report the expected binding after reconciliation.`,
+      `Worker ${request.workerName} declares Hyperdrive binding ${hyperdrive.binding || "HYPERDRIVE"}, but the release deploy did not produce the expected binding identity.`,
       [],
       {
         release: {
           state: readiness.state,
           databaseRequired,
           hyperdrive,
-          hyperdriveReconciled: reconciledHyperdrive.changed,
+          hyperdriveReconciled: false,
           readiness
         }
       }
@@ -1274,7 +1312,7 @@ export async function provisionBrownfieldWorker(
           state: readiness.state,
           databaseRequired,
           hyperdrive,
-          hyperdriveReconciled: reconciledHyperdrive.changed,
+          hyperdriveReconciled: false,
           readiness
         }
       }
@@ -1319,7 +1357,7 @@ export async function provisionBrownfieldWorker(
       state: readiness.state,
       databaseRequired,
       hyperdrive,
-      hyperdriveReconciled: reconciledHyperdrive.changed,
+      hyperdriveReconciled: false,
       readiness
     }
   };

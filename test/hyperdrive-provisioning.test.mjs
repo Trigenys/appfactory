@@ -24,22 +24,11 @@ test("Hyperdrive provisioning uses the documented Cloudflare config API", () => 
   assert.match(source, /Hyperdrive Write/);
 });
 
-test("Worker binding preserves unrelated bindings through inheritance", () => {
-  assert.match(source, /\/workers\/scripts\/\$\{encodeURIComponent\(workerName\)\}\/settings/);
-  assert.match(source, /type: "inherit"/);
-  assert.match(source, /type: "hyperdrive"/);
-  assert.match(source, /HYPERDRIVE_BINDING_CONFLICT/);
-  assert.match(source, /HYPERDRIVE_BINDING_VERIFICATION_FAILED/);
-  assert.match(source, /Workers Scripts Write/);
-});
-
-test("Worker settings binding updates use Cloudflare multipart form contract", () => {
-  assert.match(source, /const form = new FormData\(\)/);
-  assert.match(source, /form\.append\(\s*"settings"/s);
-  assert.match(source, /JSON\.stringify\(\{ bindings: desiredBindings \}\)/);
-  assert.match(source, /type: "application\/json"/);
-  assert.match(source, /method: "PATCH",[\s\S]*?body: form/s);
-  assert.match(source, /if \(!\(init\.body instanceof FormData\) && !headers\.has\("Content-Type"\)\)/);
+test("Hyperdrive provisioning defers the Worker binding to the release deploy", () => {
+  assert.match(source, /deferredToDeploy: true/);
+  assert.match(source, /configured: false/);
+  assert.doesNotMatch(source, /async function ensureWorkerBinding/);
+  assert.doesNotMatch(source, /HYPERDRIVE_BINDING_ROLLBACK_FAILED/);
 });
 
 test("Hyperdrive provisioning requires an AppFactory-managed Worker and ownership marker", () => {
@@ -48,11 +37,6 @@ test("Hyperdrive provisioning requires an AppFactory-managed Worker and ownershi
   assert.match(source, /BROWNFIELD_WORKER_UNCLAIMED/);
   assert.match(source, /BROWNFIELD_HYPERDRIVE_UNCLAIMED/);
   assert.match(source, /HYPERDRIVE_MARKER_MISMATCH/);
-});
-
-test("new Hyperdrive is compensated when binding fails", () => {
-  assert.match(source, /if \(created\)[\s\S]*?deleteHyperdrive/);
-  assert.match(source, /HYPERDRIVE_BINDING_ROLLBACK_FAILED/);
 });
 
 test("OIDC infrastructure router exposes Hyperdrive provisioning", () => {

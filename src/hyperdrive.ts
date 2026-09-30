@@ -104,6 +104,7 @@ export interface HyperdriveProvisioningResult {
   binding: {
     name: string;
     configured: boolean;
+    deferredToDeploy: boolean;
   };
   marker: {
     path: string;
@@ -728,55 +729,18 @@ export async function managedHyperdriveEvidence(
   };
 }
 
-export async function reconcileManagedHyperdriveBinding(
+export async function verifyManagedHyperdriveBinding(
   githubToken: string,
   env: Env,
   repository: GitHubRepository,
   workerName: string
-): Promise<{ evidence: ManagedHyperdriveEvidence; changed: boolean }> {
-  const markerFile = await readHyperdriveMarker(githubToken, repository);
-  if (!markerFile) {
-    return {
-      evidence: {
-        declared: false,
-        binding: null,
-        id: null,
-        actualId: null,
-        configured: false
-      },
-      changed: false
-    };
-  }
-
-  const marker = markerFile.marker;
-  if (
-    marker.schemaVersion !== SCHEMA_VERSION ||
-    marker.provider !== "cloudflare-hyperdrive" ||
-    marker.repository !== repository.full_name ||
-    marker.workerName !== workerName
-  ) {
-    throw new HyperdriveProvisioningError(
-      "HYPERDRIVE_MARKER_MISMATCH",
-      "Existing AppFactory Hyperdrive marker does not match the requested Worker."
-    );
-  }
-
-  const changed = await ensureWorkerBinding(
+): Promise<ManagedHyperdriveEvidence> {
+  return managedHyperdriveEvidence(
+    githubToken,
     env,
-    workerName,
-    marker.binding,
-    marker.id
+    repository,
+    workerName
   );
-
-  return {
-    evidence: await managedHyperdriveEvidence(
-      githubToken,
-      env,
-      repository,
-      workerName
-    ),
-    changed
-  };
 }
 
 function validateExistingMarker(
@@ -849,97 +813,6 @@ async function ensureHyperdrive(
   };
 }
 
-function inheritedBindings(bindings: WorkerBinding[], targetName: string): WorkerBinding[] {
-  return bindings
-    .filter((binding) => binding.name !== targetName)
-    .map((binding) => ({
-      name: binding.name,
-      type: "inherit"
-    }));
-}
-
-async function ensureWorkerBinding(
-  env: Env,
-  workerName: string,
-  bindingName: string,
-  hyperdriveId: string
-): Promise<boolean> {
-  const path =
-    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID || "")}/workers/scripts/${encodeURIComponent(workerName)}/settings`;
-
-  let settings: WorkerSettings;
-  try {
-    settings = await cloudflareRequest<WorkerSettings>(env, path);
-  } catch (error) {
-    permissionError(error, "read Worker bindings", ["Workers Scripts Read"]);
-  }
-
-  const bindings = settings.bindings || [];
-  const current = bindings.find((binding) => binding.name === bindingName);
-  if (current) {
-    if (current.type !== "hyperdrive") {
-      throw new HyperdriveProvisioningError(
-        "HYPERDRIVE_BINDING_CONFLICT",
-        `Worker binding ${bindingName} already exists with type ${current.type}; refusing replacement.`
-      );
-    }
-    if (current.id === hyperdriveId) return false;
-  }
-
-  const desiredBindings = [
-    ...inheritedBindings(bindings, bindingName),
-    {
-      name: bindingName,
-      type: "hyperdrive",
-      id: hyperdriveId
-    }
-  ];
-
-  const form = new FormData();
-  form.append(
-    "settings",
-    new Blob(
-      [JSON.stringify({ bindings: desiredBindings })],
-      { type: "application/json" }
-    )
-  );
-
-  try {
-    await cloudflareRequest<WorkerSettings>(env, path, {
-      method: "PATCH",
-      body: form
-    });
-  } catch (error) {
-    permissionError(error, "attach Hyperdrive to the managed Worker", [
-      "Workers Scripts Write"
-    ]);
-  }
-
-  let verified: WorkerSettings;
-  try {
-    verified = await cloudflareRequest<WorkerSettings>(env, path);
-  } catch (error) {
-    permissionError(error, "verify the Hyperdrive Worker binding", [
-      "Workers Scripts Read"
-    ]);
-  }
-
-  const bound = (verified.bindings || []).some(
-    (binding) =>
-      binding.name === bindingName &&
-      binding.type === "hyperdrive" &&
-      binding.id === hyperdriveId
-  );
-  if (!bound) {
-    throw new HyperdriveProvisioningError(
-      "HYPERDRIVE_BINDING_VERIFICATION_FAILED",
-      `Cloudflare did not report ${bindingName} bound to the expected Hyperdrive configuration after mutation.`
-    );
-  }
-
-  return true;
-}
-
 export async function provisionHyperdrive(
   githubToken: string,
   env: Env,
@@ -962,28 +835,6 @@ export async function provisionHyperdrive(
     profile,
     markerFile?.marker || null
   );
-
-  let bindingConfigured = false;
-  try {
-    bindingConfigured = await ensureWorkerBinding(
-      env,
-      request.workerName,
-      request.binding,
-      config.id
-    );
-  } catch (error) {
-    if (created) {
-      try {
-        await deleteHyperdrive(env, config.id);
-      } catch (rollbackError) {
-        throw new HyperdriveProvisioningError(
-          "HYPERDRIVE_BINDING_ROLLBACK_FAILED",
-          `Hyperdrive ${request.hyperdriveName} was created, but binding failed and the new configuration could not be removed. Original error: ${error instanceof Error ? error.message : String(error)}. Rollback error: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`
-        );
-      }
-    }
-    throw error;
-  }
 
   const expectedMarker: HyperdriveMarker = {
     schemaVersion: SCHEMA_VERSION,
@@ -1019,7 +870,8 @@ export async function provisionHyperdrive(
     },
     binding: {
       name: request.binding,
-      configured: bindingConfigured
+      configured: false,
+      deferredToDeploy: true
     },
     marker: {
       path: HYPERDRIVE_MARKER_PATH,
