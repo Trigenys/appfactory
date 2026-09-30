@@ -33,6 +33,15 @@ test("migration runs before deploy and blocks release on failure", () => {
   assert.match(worker, /buildCompleted: request\.migration \? completedBuild\.build_outcome === "success"/);
 });
 
+test("complex release commands are passed through Workers Builds environment variables", () => {
+  assert.match(worker, /deployCommandRequiresBuildEnv/);
+  assert.match(worker, /bash -lc "\$APPFACTORY_DEPLOY_COMMAND"/);
+  assert.match(worker, /buildVariables\.APPFACTORY_DEPLOY_COMMAND/);
+  assert.match(worker, /value: releaseDeployCommand/);
+  assert.match(worker, /is_secret: false/);
+  assert.match(worker, /configureBuildEnvironment\(env, trigger\.trigger_uuid, buildVariables\)/);
+});
+
 test("migration identity is deterministic and marker-backed", () => {
   assert.match(worker, /MIGRATION_PROFILE_FORBIDDEN/);
   assert.match(worker, /MIGRATION_DATABASE_ENV_FORBIDDEN/);
