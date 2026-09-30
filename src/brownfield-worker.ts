@@ -841,11 +841,17 @@ async function ensureProductionTrigger(
   }
 }
 
-async function configureMigrationBuildSecret(
+type BuildEnvironmentVariable = {
+  value: string;
+  is_secret: boolean;
+};
+
+async function configureBuildEnvironment(
   env: Env,
   triggerUuid: string,
-  databaseUrl: string
+  variables: Record<string, BuildEnvironmentVariable>
 ): Promise<void> {
+  if (Object.keys(variables).length === 0) return;
   assertCloudflareConfig(env);
   try {
     await cloudflareRequest<unknown>(
@@ -853,16 +859,11 @@ async function configureMigrationBuildSecret(
       `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/triggers/${encodeURIComponent(triggerUuid)}/environment_variables`,
       {
         method: "PATCH",
-        body: JSON.stringify({
-          APPFACTORY_DATABASE_URL: {
-            value: databaseUrl,
-            is_secret: true
-          }
-        })
+        body: JSON.stringify(variables)
       }
     );
   } catch (error) {
-    permissionError(error, "configure the migration database build secret", [
+    permissionError(error, "configure Workers Builds environment variables", [
       "Workers Builds Configuration Edit"
     ]);
   }
@@ -1236,6 +1237,11 @@ export async function provisionBrownfieldWorker(
     request.migration || null
   );
 
+  const deployCommandRequiresBuildEnv = releaseDeployCommand !== request.deployCommand;
+  const triggerDeployCommand = deployCommandRequiresBuildEnv
+    ? 'bash -lc "$APPFACTORY_DEPLOY_COMMAND"'
+    : request.deployCommand;
+
   const connection = await ensureRepositoryConnection(env, repository);
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
     env,
@@ -1245,16 +1251,28 @@ export async function provisionBrownfieldWorker(
     {
       rootDirectory: request.rootDirectory,
       buildCommand: request.buildCommand,
-      deployCommand: releaseDeployCommand
+      deployCommand: triggerDeployCommand
     }
   );
+
+  const buildVariables: Record<string, BuildEnvironmentVariable> = {};
+  if (deployCommandRequiresBuildEnv) {
+    buildVariables.APPFACTORY_DEPLOY_COMMAND = {
+      value: releaseDeployCommand,
+      is_secret: false
+    };
+  }
 
   let migrationBuildSecretConfigured = false;
   if (request.migration) {
     const databaseUrl = managedDatabaseUrl(env, request.migration.profile);
-    await configureMigrationBuildSecret(env, trigger.trigger_uuid, databaseUrl);
+    buildVariables.APPFACTORY_DATABASE_URL = {
+      value: databaseUrl,
+      is_secret: true
+    };
     migrationBuildSecretConfigured = true;
   }
+  await configureBuildEnvironment(env, trigger.trigger_uuid, buildVariables);
 
   const { build, reused } = await ensureBuild(
     env,
