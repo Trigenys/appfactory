@@ -869,7 +869,7 @@ async function configureBuildEnvironment(
   }
 }
 
-const WORKER_BUILD_POLL_INTERVAL_MS = 15_000;
+const WORKER_BUILD_POLL_INTERVAL_MS = 60_000;
 const WORKER_BUILD_MAX_POLLS = 12;
 
 async function waitForWorkerBuild(
@@ -896,7 +896,7 @@ async function waitForWorkerBuild(
 
   throw new BrownfieldWorkerProvisioningError(
     "CLOUDFLARE_WORKERS_BUILD_TIMEOUT",
-    `Cloudflare Workers Build ${buildUuid} did not reach a terminal state within 3 minutes.`
+    `Cloudflare Workers Build ${buildUuid} did not reach a terminal state within 12 minutes.`
   );
 }
 
