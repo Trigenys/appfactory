@@ -48,3 +48,14 @@ test("readiness failures surface non-secret release evidence", () => {
   assert.match(index, /error\.evidence \? \{ evidence: error\.evidence \}/);
   assert.doesNotMatch(worker, /evidence:[\s\S]*?APPFACTORY_DATABASE_URL/);
 });
+
+
+test("failed readiness probes preserve bounded non-secret diagnostics", () => {
+  assert.match(readiness, /httpStatus: number \| null/);
+  assert.match(readiness, /probeError: string \| null/);
+  assert.match(readiness, /slice\(0, 240\)/);
+  assert.match(readiness, /invalid health JSON:/);
+  assert.match(worker, /probe_http=/);
+  assert.match(worker, /probe_error=/);
+  assert.doesNotMatch(readiness, /APPFACTORY_DATABASE_URL/);
+});
