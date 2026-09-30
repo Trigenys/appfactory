@@ -869,13 +869,16 @@ async function configureBuildEnvironment(
   }
 }
 
+const WORKER_BUILD_POLL_INTERVAL_MS = 15_000;
+const WORKER_BUILD_MAX_POLLS = 12;
+
 async function waitForWorkerBuild(
   env: Env,
   workerTag: string,
   buildUuid: string
 ): Promise<WorkerBuild> {
   const terminal = new Set(["success", "fail", "cancelled", "terminated"]);
-  for (let attempt = 0; attempt < 90; attempt += 1) {
+  for (let attempt = 0; attempt < WORKER_BUILD_MAX_POLLS; attempt += 1) {
     const builds = await listWorkerBuilds(env, workerTag);
     const build = builds.find((item) => item.build_uuid === buildUuid);
     if (build && terminal.has(build.build_outcome || "")) {
@@ -888,7 +891,7 @@ async function waitForWorkerBuild(
       }
       return build;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, WORKER_BUILD_POLL_INTERVAL_MS));
   }
 
   throw new BrownfieldWorkerProvisioningError(
