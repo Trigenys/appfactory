@@ -19,7 +19,7 @@ const ANIMATIONS = new Set<AnimationLevel>(["none", "subtle", "expressive"]);
 const LANGUAGES = new Set<ProjectLanguage>(["fr", "en"]);
 const ENGINES = new Set<GenerationEngine>(["native", "openpage"]);
 const PROJECT_TYPES = new Set<ProjectType>(["landing", "service", "mobile", "desktop", "webapp", "profile"]);
-const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements"]);
+const SERVICE_PRESETS = new Set<ServicePreset>(["entitlements", "typescript-api"]);
 const MOBILE_PLATFORMS = new Set<MobilePlatform>(["android"]);
 const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
 const DESKTOP_PLATFORMS = new Set<DesktopPlatform>(["windows"]);
@@ -75,7 +75,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
   const platform = body.platform;
   if (projectType === "service") {
     if (typeof preset !== "string" || !SERVICE_PRESETS.has(preset as ServicePreset)) {
-      throw new Error("service projects require preset: entitlements.");
+      throw new Error("service projects require preset: entitlements or typescript-api.");
     }
     if (platform !== undefined) {
       throw new Error("platform is not valid when projectType is service.");
