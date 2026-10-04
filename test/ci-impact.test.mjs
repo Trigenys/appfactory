@@ -11,7 +11,20 @@ test("frontend-only blueprint changes run only the webapp gate", () => {
     core: false,
     android: false,
     desktop: false,
-    webapp: true
+    webapp: true,
+    service: false
+  });
+});
+
+
+test("generic service blueprint changes run only the service gate", () => {
+  const result = classifyChanges(["blueprints/typescript-api/src/server.ts"], config);
+  assert.deepEqual(result.gates, {
+    core: false,
+    android: false,
+    desktop: false,
+    webapp: false,
+    service: true
   });
 });
 
@@ -21,6 +34,7 @@ test("platform provisioner changes run core plus their platform gate", () => {
   assert.equal(result.gates.android, true);
   assert.equal(result.gates.desktop, false);
   assert.equal(result.gates.webapp, false);
+  assert.equal(result.gates.service, false);
 });
 
 test("global CI surfaces invalidate every gate", () => {
@@ -30,7 +44,8 @@ test("global CI surfaces invalidate every gate", () => {
     core: true,
     android: true,
     desktop: true,
-    webapp: true
+    webapp: true,
+    service: true
   });
 });
 
@@ -44,7 +59,8 @@ test("documentation and provisioning requests do not trigger product CI", () => 
     core: false,
     android: false,
     desktop: false,
-    webapp: false
+    webapp: false,
+    service: false
   });
   assert.equal(result.ignored.length, 3);
 });
