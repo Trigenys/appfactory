@@ -56,6 +56,17 @@
       "prefixes": [
         "blueprints/react-vite/"
       ]
+    },
+    "service": {
+      "files": [
+        "src/service-provisioning.ts",
+        "src/validation.ts",
+        "src/types.ts",
+        "src/index.ts"
+      ],
+      "prefixes": [
+        "blueprints/typescript-api/"
+      ]
     }
   },
   "fallbackGate": "core"
