@@ -22,6 +22,7 @@ jobs:
       android: ${{ steps.classify.outputs.android }}
       desktop: ${{ steps.classify.outputs.desktop }}
       webapp: ${{ steps.classify.outputs.webapp }}
+      service: ${{ steps.classify.outputs.service }}
       any: ${{ steps.classify.outputs.any }}
     steps:
       - name: Checkout
@@ -154,6 +155,24 @@ jobs:
         run: cargo fmt --manifest-path blueprints/tauri-react/src-tauri/Cargo.toml -- --check
       - name: Check desktop native crate
         run: cargo check --manifest-path blueprints/tauri-react/src-tauri/Cargo.toml
+
+
+  service-blueprint:
+    needs: impact
+    if: needs.impact.outputs.service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Validate generic TypeScript API service blueprint
+        working-directory: blueprints/typescript-api
+        run: |
+          npm install --ignore-scripts
+          npm run check
 
   webapp-blueprint:
     needs: impact

@@ -2,6 +2,27 @@
 
 AppFactory can provision backend service repositories in addition to landing projects.
 
+## Generic TypeScript API service
+
+Use `preset: "typescript-api"` for backend/API products that need AppFactory repository governance without inheriting a product-specific cloud, database or domain model.
+
+```http
+POST /projects
+Content-Type: application/json
+
+{
+  "name": "Payment Orchestrator",
+  "slug": "payment-orchestrator",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": false
+}
+```
+
+The generated repository includes Node.js 24, TypeScript, a minimal health endpoint, tests, CI, AppFactory Project Automation, shared release automation and RAIDER engineering guidance. AppFactory deliberately leaves hosting, persistence, queues and runtime secrets unprovisioned for this preset so those choices can follow the product workload rather than the generator.
+
+Repeated requests reconcile against the AppFactory service marker and return the existing managed repository instead of creating a duplicate.
+
 The first supported service preset is `entitlements`, a central licensing and feature-entitlement boundary for Trigenys products.
 
 ## Provision an entitlement service
