@@ -19,7 +19,7 @@ Content-Type: application/json
 }
 ```
 
-The generated repository includes Node.js 24, TypeScript, a minimal health endpoint, tests, CI, AppFactory Project Automation, shared release automation and RAIDER engineering guidance. AppFactory deliberately leaves hosting, persistence, queues and runtime secrets unprovisioned for this preset so those choices can follow the product workload rather than the generator.
+The generated repository includes Node.js 24, TypeScript, a minimal health endpoint, tests, CI, AppFactory Project Automation, manual release automation and RAIDER engineering guidance. Automatic semantic releases remain opt-in so a bootstrap commit cannot imply product release readiness. AppFactory deliberately leaves hosting, persistence, queues and runtime secrets unprovisioned for this preset so those choices can follow the product workload rather than the generator.
 
 Repeated requests reconcile against the AppFactory service marker and return the existing managed repository instead of creating a duplicate.
 
