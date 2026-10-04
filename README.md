@@ -81,7 +81,7 @@ Example:
 
 ## Service project blueprints
 
-AppFactory can also provision backend services through `projectType: "service"`. The first preset is `entitlements`, which generates the service repository, provisions/reuses D1, wires the real database UUID into Wrangler, creates/reuses the Cloudflare Worker, connects native Workers Builds, runs remote D1 migrations and triggers the first production build. Online checks, short-lived Ed25519 offline grants, CI and AppFactory Project Automation are included in the generated repository.
+AppFactory can provision backend services through `projectType: "service"`. The generic `typescript-api` preset creates a Node.js 24 + TypeScript service repository with CI, AppFactory Project Automation, release automation and RAIDER guidance while intentionally leaving hosting and persistence to the product. The specialized `entitlements` preset additionally provisions/reuses D1, wires the real database UUID into Wrangler, creates/reuses the Cloudflare Worker, connects native Workers Builds, runs remote D1 migrations and triggers the first production build.
 
 Service repositories intentionally bypass the landing renderer and Cloudflare Pages. See [Service project blueprints](docs/service-blueprints.md) for the request contract, Cloudflare delivery path, ownership boundaries and idempotency model.
 
