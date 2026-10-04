@@ -40,3 +40,14 @@ test('all generated product blueprints share one Project authentication contract
     assert.equal(workflow, workflows[0]);
   }
 });
+
+
+test('generic TypeScript API release is manual-only until the product opts in', () => {
+  const workflow = fs.readFileSync(
+    new URL('blueprints/typescript-api/.github/workflows/release.yml', root),
+    'utf8'
+  );
+
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /\n\s*push:/);
+});
