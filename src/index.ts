@@ -476,12 +476,53 @@ async function createProject(request: Request, env: Env): Promise<Response> {
     }
 
     if (input.projectType === "service") {
-      if (input.preset !== "entitlements") throw new Error("Service preset is required after validation.");
+      if (input.preset !== "entitlements" && input.preset !== "typescript-api") {
+        throw new Error("Service preset is required after validation.");
+      }
       const provisioned = await provisionServiceRepository(token, env, {
         ...input,
         projectType: "service",
         preset: input.preset
       });
+
+      if (input.preset === "typescript-api") {
+        return json(
+          {
+            status: "PROVISIONED",
+            projectType: "service",
+            preset: input.preset,
+            repository: provisioned.repository.full_name,
+            repositoryUrl: provisioned.repository.html_url,
+            defaultBranch: provisioned.repository.default_branch,
+            commitSha: provisioned.commitSha,
+            idempotency: {
+              repositoryReplay: provisioned.replay,
+              blueprintUpgrade: provisioned.upgraded
+                ? {
+                    from: provisioned.previousBlueprintVersion,
+                    to: provisioned.blueprintVersion
+                  }
+                : null
+            },
+            infrastructure: {
+              provider: null,
+              managedByAppFactory: false
+            },
+            quality: {
+              runtime: "Node.js 24",
+              language: "TypeScript",
+              projectAutomation: "AppFactory OIDC broker",
+              hosting: "consumer-selected"
+            },
+            nextSteps: {
+              projectAutomation: "Project Automation is preconfigured through GitHub Actions OIDC and the AppFactory broker; no repository PROJECT_TOKEN is required.",
+              infrastructure: "Choose deployment, persistence and secret storage according to the service workload; the generic preset intentionally makes no cloud or database assumption."
+            }
+          },
+          provisioned.replay ? 200 : 201
+        );
+      }
+
       const infrastructure = await provisionServiceCloudflare(token, env, provisioned.repository);
       return json(
         {
