@@ -856,6 +856,7 @@ async function provisionExistingHyperdrive(
     if (error instanceof HyperdriveProvisioningError) {
       const conflictCodes = new Set([
         "REPOSITORY_MISMATCH",
+        "INFRASTRUCTURE_ENVIRONMENT_FORBIDDEN",
         "WORKER_NAME_FORBIDDEN",
         "DATABASE_PROFILE_FORBIDDEN",
         "HYPERDRIVE_NAME_FORBIDDEN",
@@ -959,6 +960,7 @@ async function provisionExistingWorker(
     if (error instanceof BrownfieldWorkerProvisioningError) {
       const conflictCodes = new Set([
         "REPOSITORY_MISMATCH",
+        "INFRASTRUCTURE_ENVIRONMENT_FORBIDDEN",
         "WORKER_NAME_FORBIDDEN",
         "ROOT_DIRECTORY_FORBIDDEN",
         "BUILD_COMMAND_FORBIDDEN",

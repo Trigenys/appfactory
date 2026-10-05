@@ -5,8 +5,11 @@ const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const WORKER_MARKER_PATH = ".appfactory/worker-infrastructure.json";
 const HYPERDRIVE_MARKER_PATH = ".appfactory/hyperdrive.json";
+const STAGING_HYPERDRIVE_MARKER_PATH = ".appfactory/hyperdrive.staging.json";
 const SCHEMA_VERSION = 1;
 const DEFAULT_BINDING = "HYPERDRIVE";
+
+export type InfrastructureEnvironment = "production" | "staging";
 
 interface DatabaseOrigin {
   scheme: "postgres" | "postgresql" | "mysql";
@@ -71,6 +74,7 @@ interface WorkerMarker {
   provider: string;
   repository: string;
   workerName: string;
+  environment?: InfrastructureEnvironment;
 }
 
 interface HyperdriveMarker {
@@ -82,10 +86,12 @@ interface HyperdriveMarker {
   hyperdriveName: string;
   binding: string;
   id: string;
+  environment?: InfrastructureEnvironment;
 }
 
 export interface HyperdriveProvisioningRequest {
   repository: string;
+  environment?: InfrastructureEnvironment;
   workerName?: string;
   profile?: string;
   hyperdriveName?: string;
@@ -319,16 +325,23 @@ async function readGitHubFile(
   return await response.json() as GitHubFile;
 }
 
+function hyperdriveMarkerPath(environment: InfrastructureEnvironment): string {
+  return environment === "staging"
+    ? STAGING_HYPERDRIVE_MARKER_PATH
+    : HYPERDRIVE_MARKER_PATH;
+}
+
 async function writeMarker(
   token: string,
   repository: GitHubRepository,
   marker: HyperdriveMarker,
+  markerPath: string,
   currentSha?: string
 ): Promise<void> {
   const [owner, repo] = repository.full_name.split("/");
   await githubRequest(
     token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${HYPERDRIVE_MARKER_PATH}`,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${markerPath}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -341,12 +354,22 @@ async function writeMarker(
   );
 }
 
-function expectedWorkerName(repository: GitHubRepository): string {
-  return `${repository.name}-api`.slice(0, 63);
+function expectedWorkerName(
+  repository: GitHubRepository,
+  environment: InfrastructureEnvironment
+): string {
+  return environment === "staging"
+    ? `${repository.name}-staging-api`.slice(0, 63)
+    : `${repository.name}-api`.slice(0, 63);
 }
 
-function expectedProfile(repository: GitHubRepository): string {
-  return `${repository.name}-production`;
+function expectedProfile(
+  repository: GitHubRepository,
+  environment: InfrastructureEnvironment
+): string {
+  return environment === "staging"
+    ? `${repository.name}-staging`
+    : `${repository.name}-production`;
 }
 
 function validateRequest(
@@ -361,27 +384,35 @@ function validateRequest(
     );
   }
 
-  const workerName = input.workerName || expectedWorkerName(repository);
-  if (workerName !== expectedWorkerName(repository)) {
+  const environment = input.environment || "production";
+  if (environment !== "production" && environment !== "staging") {
+    throw new HyperdriveProvisioningError(
+      "INFRASTRUCTURE_ENVIRONMENT_FORBIDDEN",
+      "Infrastructure environment must be production or staging."
+    );
+  }
+
+  const workerName = input.workerName || expectedWorkerName(repository, environment);
+  if (workerName !== expectedWorkerName(repository, environment)) {
     throw new HyperdriveProvisioningError(
       "WORKER_NAME_FORBIDDEN",
-      `Worker name must be ${expectedWorkerName(repository)}.`
+      `Worker name must be ${expectedWorkerName(repository, environment)}.`
     );
   }
 
-  const profile = input.profile || expectedProfile(repository);
-  if (profile !== expectedProfile(repository)) {
+  const profile = input.profile || expectedProfile(repository, environment);
+  if (profile !== expectedProfile(repository, environment)) {
     throw new HyperdriveProvisioningError(
       "DATABASE_PROFILE_FORBIDDEN",
-      `Database profile must be ${expectedProfile(repository)}.`
+      `Database profile must be ${expectedProfile(repository, environment)}.`
     );
   }
 
-  const hyperdriveName = input.hyperdriveName || expectedProfile(repository);
-  if (hyperdriveName !== expectedProfile(repository)) {
+  const hyperdriveName = input.hyperdriveName || expectedProfile(repository, environment);
+  if (hyperdriveName !== expectedProfile(repository, environment)) {
     throw new HyperdriveProvisioningError(
       "HYPERDRIVE_NAME_FORBIDDEN",
-      `Hyperdrive name must be ${expectedProfile(repository)}.`
+      `Hyperdrive name must be ${expectedProfile(repository, environment)}.`
     );
   }
 
@@ -395,6 +426,7 @@ function validateRequest(
 
   return {
     repository: repository.full_name,
+    environment,
     workerName,
     profile,
     hyperdriveName,
@@ -479,13 +511,24 @@ export function managedDatabaseUrl(env: Env, profileName: string): string {
 }
 
 
+function workerMarkerPath(environment: InfrastructureEnvironment): string {
+  return environment === "staging"
+    ? ".appfactory/worker-infrastructure.staging.json"
+    : WORKER_MARKER_PATH;
+}
+
 async function assertManagedWorker(
   githubToken: string,
   env: Env,
   repository: GitHubRepository,
-  workerName: string
+  workerName: string,
+  environment: InfrastructureEnvironment
 ): Promise<void> {
-  const markerFile = await readGitHubFile(githubToken, repository, WORKER_MARKER_PATH);
+  const markerFile = await readGitHubFile(
+    githubToken,
+    repository,
+    workerMarkerPath(environment)
+  );
   if (!markerFile) {
     throw new HyperdriveProvisioningError(
       "BROWNFIELD_WORKER_UNCLAIMED",
@@ -504,7 +547,8 @@ async function assertManagedWorker(
     marker.schemaVersion !== 1 ||
     marker.provider !== "cloudflare-workers-builds" ||
     marker.repository !== repository.full_name ||
-    marker.workerName !== workerName
+    marker.workerName !== workerName ||
+    (marker.environment || "production") !== environment
   ) {
     throw new HyperdriveProvisioningError(
       "INFRASTRUCTURE_MARKER_MISMATCH",
@@ -651,9 +695,14 @@ async function deleteHyperdrive(env: Env, id: string): Promise<void> {
 
 async function readHyperdriveMarker(
   githubToken: string,
-  repository: GitHubRepository
+  repository: GitHubRepository,
+  environment: InfrastructureEnvironment
 ): Promise<{ marker: HyperdriveMarker; sha: string } | null> {
-  const file = await readGitHubFile(githubToken, repository, HYPERDRIVE_MARKER_PATH);
+  const file = await readGitHubFile(
+    githubToken,
+    repository,
+    hyperdriveMarkerPath(environment)
+  );
   if (!file) return null;
   if (file.encoding !== "base64") {
     throw new HyperdriveProvisioningError(
@@ -678,9 +727,14 @@ export async function managedHyperdriveEvidence(
   githubToken: string,
   env: Env,
   repository: GitHubRepository,
-  workerName: string
+  workerName: string,
+  environment: InfrastructureEnvironment = "production"
 ): Promise<ManagedHyperdriveEvidence> {
-  const markerFile = await readHyperdriveMarker(githubToken, repository);
+  const markerFile = await readHyperdriveMarker(
+    githubToken,
+    repository,
+    environment
+  );
   if (!markerFile) {
     return {
       declared: false,
@@ -733,13 +787,15 @@ export async function verifyManagedHyperdriveBinding(
   githubToken: string,
   env: Env,
   repository: GitHubRepository,
-  workerName: string
+  workerName: string,
+  environment: InfrastructureEnvironment = "production"
 ): Promise<ManagedHyperdriveEvidence> {
   return managedHyperdriveEvidence(
     githubToken,
     env,
     repository,
-    workerName
+    workerName,
+    environment
   );
 }
 
@@ -752,6 +808,7 @@ function validateExistingMarker(
     marker.provider !== "cloudflare-hyperdrive" ||
     marker.repository !== request.repository ||
     marker.workerName !== request.workerName ||
+    (marker.environment || "production") !== request.environment ||
     marker.profile !== request.profile ||
     marker.hyperdriveName !== request.hyperdriveName ||
     marker.binding !== request.binding
@@ -822,11 +879,21 @@ export async function provisionHyperdrive(
   assertCloudflareConfig(env);
   const repository = await repositoryByFullName(githubToken, callerRepository);
   const request = validateRequest(repository, callerRepository, input);
-  await assertManagedWorker(githubToken, env, repository, request.workerName);
+  await assertManagedWorker(
+    githubToken,
+    env,
+    repository,
+    request.workerName,
+    request.environment
+  );
 
   const profiles = parseProfiles(env);
   const profile = validateProfile(request.profile, profiles[request.profile]);
-  const markerFile = await readHyperdriveMarker(githubToken, repository);
+  const markerFile = await readHyperdriveMarker(
+    githubToken,
+    repository,
+    request.environment
+  );
   if (markerFile) validateExistingMarker(markerFile.marker, request);
 
   const { config, created, updated } = await ensureHyperdrive(
@@ -844,7 +911,10 @@ export async function provisionHyperdrive(
     profile: request.profile,
     hyperdriveName: request.hyperdriveName,
     binding: request.binding,
-    id: config.id
+    id: config.id,
+    ...(request.environment === "staging"
+      ? { environment: request.environment }
+      : {})
   };
 
   const markerChanged = !markerFile ||
@@ -855,6 +925,7 @@ export async function provisionHyperdrive(
       githubToken,
       repository,
       expectedMarker,
+      hyperdriveMarkerPath(request.environment),
       markerFile?.sha
     );
   }
@@ -874,7 +945,7 @@ export async function provisionHyperdrive(
       deferredToDeploy: true
     },
     marker: {
-      path: HYPERDRIVE_MARKER_PATH,
+      path: hyperdriveMarkerPath(request.environment),
       updated: markerChanged
     }
   };

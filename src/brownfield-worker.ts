@@ -3,6 +3,7 @@ import {
   managedDatabaseUrl,
   managedHyperdriveEvidence,
   verifyManagedHyperdriveBinding,
+  type InfrastructureEnvironment,
   type ManagedHyperdriveEvidence
 } from "./hyperdrive";
 import {
@@ -15,6 +16,7 @@ const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const MARKER_PATH = ".appfactory/worker-infrastructure.json";
+const STAGING_MARKER_PATH = ".appfactory/worker-infrastructure.staging.json";
 const SCHEMA_VERSION = 1;
 
 const LEGACY_BUILD_COMMAND =
@@ -101,6 +103,7 @@ interface WorkerMarker {
   migrationRecipe?: "python-alembic";
   migrationProfile?: string;
   databaseUrlEnv?: string;
+  environment?: InfrastructureEnvironment;
 }
 
 export interface GeneratedWorkerSecret {
@@ -116,6 +119,7 @@ export interface WorkerMigrationGate {
 
 export interface BrownfieldWorkerRequest {
   repository: string;
+  environment?: InfrastructureEnvironment;
   workerName?: string;
   rootDirectory?: string;
   buildCommand?: string;
@@ -326,11 +330,20 @@ async function readGitHubFile(
   return await response.json() as GitHubFile;
 }
 
+function workerMarkerPath(environment: InfrastructureEnvironment): string {
+  return environment === "staging" ? STAGING_MARKER_PATH : MARKER_PATH;
+}
+
 async function readMarker(
   token: string,
-  repository: GitHubRepository
+  repository: GitHubRepository,
+  environment: InfrastructureEnvironment
 ): Promise<{ marker: WorkerMarker; sha: string } | null> {
-  const file = await readGitHubFile(token, repository, MARKER_PATH);
+  const file = await readGitHubFile(
+    token,
+    repository,
+    workerMarkerPath(environment)
+  );
   if (!file) return null;
   if (file.encoding !== "base64") throw new Error("Unsupported GitHub marker encoding.");
   return {
@@ -343,12 +356,13 @@ async function writeMarker(
   token: string,
   repository: GitHubRepository,
   marker: WorkerMarker,
+  markerPath: string,
   currentSha?: string
 ): Promise<string> {
   const [owner, repo] = repository.full_name.split("/");
   const result = await githubRequest<{ commit: { sha: string } }>(
     token,
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${MARKER_PATH}`,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${markerPath}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -374,8 +388,13 @@ async function headSha(
   return ref.object.sha;
 }
 
-function expectedWorkerName(repository: GitHubRepository): string {
-  return `${repository.name}-api`.slice(0, 63);
+function expectedWorkerName(
+  repository: GitHubRepository,
+  environment: InfrastructureEnvironment
+): string {
+  return environment === "staging"
+    ? `${repository.name}-staging-api`.slice(0, 63)
+    : `${repository.name}-api`.slice(0, 63);
 }
 
 function databaseSecretPrefix(repository: GitHubRepository): string {
@@ -384,6 +403,7 @@ function databaseSecretPrefix(repository: GitHubRepository): string {
 
 function validateMigrationGate(
   repository: GitHubRepository,
+  environment: InfrastructureEnvironment,
   migration: WorkerMigrationGate | undefined
 ): {
   recipe: "python-alembic";
@@ -398,11 +418,15 @@ function validateMigrationGate(
     );
   }
 
-  const profile = migration.profile || `${repository.name}-production`;
-  if (profile !== `${repository.name}-production`) {
+  const expectedProfile =
+    environment === "staging"
+      ? `${repository.name}-staging`
+      : `${repository.name}-production`;
+  const profile = migration.profile || expectedProfile;
+  if (profile !== expectedProfile) {
     throw new BrownfieldWorkerProvisioningError(
       "MIGRATION_PROFILE_FORBIDDEN",
-      `Migration profile must be ${repository.name}-production.`
+      `Migration profile must be ${expectedProfile}.`
     );
   }
 
@@ -469,7 +493,7 @@ type ValidatedWorkerMigrationGate = {
 };
 
 type ValidatedBrownfieldWorkerRequest =
-  Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
+  Required<Pick<BrownfieldWorkerRequest, "repository" | "environment" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
   Omit<BrownfieldWorkerRequest, "migration"> & {
     migration?: ValidatedWorkerMigrationGate;
   };
@@ -485,11 +509,19 @@ function validateRequest(
     );
   }
 
-  const workerName = input.workerName || expectedWorkerName(repository);
-  if (workerName !== expectedWorkerName(repository)) {
+  const environment = input.environment || "production";
+  if (environment !== "production" && environment !== "staging") {
+    throw new BrownfieldWorkerProvisioningError(
+      "INFRASTRUCTURE_ENVIRONMENT_FORBIDDEN",
+      "Infrastructure environment must be production or staging."
+    );
+  }
+
+  const workerName = input.workerName || expectedWorkerName(repository, environment);
+  if (workerName !== expectedWorkerName(repository, environment)) {
     throw new BrownfieldWorkerProvisioningError(
       "WORKER_NAME_FORBIDDEN",
-      `Worker name must be ${expectedWorkerName(repository)}.`
+      `Worker name must be ${expectedWorkerName(repository, environment)}.`
     );
   }
 
@@ -533,12 +565,17 @@ function validateRequest(
     }
   }
 
-  const migration = validateMigrationGate(repository, input.migration);
+  const migration = validateMigrationGate(
+    repository,
+    environment,
+    input.migration
+  );
   const { migration: _unvalidatedMigration, ...baseInput } = input;
 
   return {
     ...baseInput,
     repository: input.repository,
+    environment,
     workerName,
     rootDirectory,
     buildCommand,
@@ -1144,7 +1181,11 @@ export async function provisionBrownfieldWorker(
   const repository = await repositoryByFullName(githubToken, callerRepository);
   const request = validateRequest(repository, input);
 
-  const markerFile = await readMarker(githubToken, repository);
+  const markerFile = await readMarker(
+    githubToken,
+    repository,
+    request.environment
+  );
   const marker = markerFile?.marker || null;
   const expectedMarker: WorkerMarker = {
     schemaVersion: SCHEMA_VERSION,
@@ -1154,6 +1195,9 @@ export async function provisionBrownfieldWorker(
     rootDirectory: request.rootDirectory,
     buildCommand: request.buildCommand,
     deployCommand: request.deployCommand,
+    ...(request.environment === "staging"
+      ? { environment: request.environment }
+      : {}),
     ...(request.migration ? {
       migrationRecipe: request.migration.recipe,
       migrationProfile: request.migration.profile,
@@ -1168,6 +1212,7 @@ export async function provisionBrownfieldWorker(
       marker.provider !== expectedMarker.provider ||
       marker.repository !== expectedMarker.repository ||
       marker.workerName !== expectedMarker.workerName ||
+      (marker.environment || "production") !== request.environment ||
       marker.rootDirectory !== expectedMarker.rootDirectory
     )
   ) {
@@ -1223,16 +1268,28 @@ export async function provisionBrownfieldWorker(
   }
 
   const configCommitSha = !marker
-    ? await writeMarker(githubToken, repository, expectedMarker)
+    ? await writeMarker(
+        githubToken,
+        repository,
+        expectedMarker,
+        workerMarkerPath(request.environment)
+      )
     : recipeChanged
-      ? await writeMarker(githubToken, repository, expectedMarker, markerFile?.sha)
+      ? await writeMarker(
+          githubToken,
+          repository,
+          expectedMarker,
+          workerMarkerPath(request.environment),
+          markerFile?.sha
+        )
       : await headSha(githubToken, repository);
 
   const preBuildHyperdrive = await managedHyperdriveEvidence(
     githubToken,
     env,
     repository,
-    request.workerName
+    request.workerName,
+    request.environment
   );
   const databaseRequired = preBuildHyperdrive.declared;
   const releaseDeployCommand = migrationDeployCommand(
@@ -1294,7 +1351,8 @@ export async function provisionBrownfieldWorker(
         githubToken,
         env,
         repository,
-        request.workerName
+        request.workerName,
+        request.environment
       )
     : preBuildHyperdrive;
 

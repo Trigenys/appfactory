@@ -130,3 +130,18 @@ Product runtime secrets are **not** generated implicitly. `ADMIN_API_KEY`, `SERV
 Service repositories carry a versioned `.appfactory/service.json` marker. Replays on the current version remain no-op/idempotent.
 
 A reviewed migration updates only an explicit AppFactory-owned file allowlist using the existing repository tree as its base. Versions 1 or 2 → 3 update Project Automation and the service marker only; application code, infrastructure configuration and product-specific changes are preserved. Version 3 promotes the reviewed immutable Project runtime `14d51168311c25f41d89df370c5e2ad2d5f42e83`. Future blueprint versions fail closed instead of being downgraded.
+
+
+## Environment-aware brownfield Worker + Hyperdrive
+
+Existing repositories can ask the OIDC infrastructure endpoint for either `production` or `staging`; omitting the field preserves the historical production behavior.
+
+For `environment: "staging"`, AppFactory deterministically owns:
+
+```text
+Worker      <repo>-staging-api
+Hyperdrive  <repo>-staging
+DB profile  <repo>-staging
+```
+
+Ownership markers are environment-isolated, so staging cannot claim or overwrite a later production Worker/Hyperdrive. The repository still never sends database credentials: the selected profile must already exist in the AppFactory-owned `HYPERDRIVE_DATABASE_PROFILES` runtime secret.
