@@ -144,6 +144,13 @@ export interface CloudflarePagesProject {
   name: string;
   subdomain?: string;
   production_branch: string;
+  build_config?: {
+    build_caching?: boolean;
+    build_command?: string | null;
+    destination_dir?: string | null;
+    root_dir?: string | null;
+  };
+  domains?: string[];
   deployment_configs?: {
     production?: {
       d1_databases?: Record<string, { id?: string }>;
@@ -162,7 +169,25 @@ export interface CloudflarePagesProject {
       production_branch?: string;
       production_deployments_enabled?: boolean;
       preview_deployment_setting?: "all" | "none" | "custom";
+      pr_comments_enabled?: boolean;
     };
+  };
+}
+
+export interface CloudflarePagesDomain {
+  id: string;
+  name: string;
+  status: "initializing" | "pending" | "active" | "deactivated" | "blocked" | "error";
+  validation_data?: {
+    method?: "http" | "txt";
+    status?: "initializing" | "pending" | "active" | "deactivated" | "error";
+    error_message?: string;
+    txt_name?: string;
+    txt_value?: string;
+  };
+  verification_data?: {
+    status?: "pending" | "active" | "deactivated" | "blocked" | "error";
+    error_message?: string;
   };
 }
 
