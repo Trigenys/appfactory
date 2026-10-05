@@ -11,7 +11,6 @@ import type {
   CloudflarePagesDomain,
   Env,
   GitHubContentCommit,
-  GitHubContentFile,
   GitHubRepository
 } from "./types";
 
@@ -249,7 +248,22 @@ function validateBuildCommand(value?: string): string {
 
 function validateBranch(repository: GitHubRepository, value?: string): string {
   const branch = (value || repository.default_branch || "main").trim();
-  if (!branch || branch.length > 240 || /[\r\n\0~^:?*[\\]/.test(branch)) {
+  const forbidden = ["~", "^", ":", "?", "*", "[", "\\"];
+  const invalidSegment = branch
+    .split("/")
+    .some((segment) => !segment || segment === "." || segment === ".." || segment.endsWith(".lock"));
+
+  if (
+    !branch ||
+    branch.length > 240 ||
+    /[\r\n\0]/.test(branch) ||
+    branch.startsWith("-") ||
+    branch.endsWith(".") ||
+    branch.includes("..") ||
+    branch.includes("@{") ||
+    invalidSegment ||
+    forbidden.some((character) => branch.includes(character))
+  ) {
     throw new BrownfieldPagesProvisioningError(
       "PAGES_BRANCH_INVALID",
       "productionBranch is not a safe Git branch name."
