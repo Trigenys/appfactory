@@ -74,6 +74,7 @@ interface WorkerMarker {
   provider: string;
   repository: string;
   workerName: string;
+  environment?: InfrastructureEnvironment;
 }
 
 interface HyperdriveMarker {
