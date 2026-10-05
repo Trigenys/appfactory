@@ -54,3 +54,11 @@ test("Hyperdrive resource auth falls back only after preferred-token auth failur
   assert.match(source, /cloudflareRequestWithToken<T>\(fallbackToken, path, init\)/);
 });
 
+
+
+test("missing Hyperdrive profiles fail closed without exposing credential values", () => {
+  assert.match(source, /HYPERDRIVE_DATABASE_PROFILE_NOT_FOUND/);
+  assert.match(source, /Object\.keys\(profiles\)\.sort\(\)/);
+  assert.match(source, /Available managed profiles/);
+  assert.doesNotMatch(source, /JSON\.stringify\(profiles\)/);
+});
