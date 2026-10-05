@@ -546,7 +546,8 @@ async function assertManagedWorker(
     marker.schemaVersion !== 1 ||
     marker.provider !== "cloudflare-workers-builds" ||
     marker.repository !== repository.full_name ||
-    marker.workerName !== workerName
+    marker.workerName !== workerName ||
+    (marker.environment || "production") !== environment
   ) {
     throw new HyperdriveProvisioningError(
       "INFRASTRUCTURE_MARKER_MISMATCH",
@@ -806,6 +807,7 @@ function validateExistingMarker(
     marker.provider !== "cloudflare-hyperdrive" ||
     marker.repository !== request.repository ||
     marker.workerName !== request.workerName ||
+    (marker.environment || "production") !== request.environment ||
     marker.profile !== request.profile ||
     marker.hyperdriveName !== request.hyperdriveName ||
     marker.binding !== request.binding
