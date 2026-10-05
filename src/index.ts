@@ -30,6 +30,11 @@ import {
   type BrownfieldWorkerRequest
 } from "./brownfield-worker";
 import {
+  BrownfieldPagesProvisioningError,
+  provisionBrownfieldPages,
+  type BrownfieldPagesRequest
+} from "./brownfield-pages";
+import {
   PagesD1ProvisioningError,
   provisionPagesD1,
   type PagesD1Request
@@ -590,6 +595,107 @@ async function createProject(request: Request, env: Env): Promise<Response> {
   }
 }
 
+async function provisionExistingPages(
+  request: Request,
+  env: Env,
+  claims: GitHubOidcClaims
+): Promise<Response> {
+  if (!claims.repository) {
+    return json(
+      {
+        error: "OIDC_REPOSITORY_REQUIRED",
+        message: "GitHub OIDC token does not identify a repository."
+      },
+      403
+    );
+  }
+
+  let payload: BrownfieldPagesRequest;
+  try {
+    payload = await request.json() as BrownfieldPagesRequest;
+  } catch {
+    return json(
+      {
+        error: "INVALID_JSON",
+        message: "Request body must contain valid JSON."
+      },
+      400
+    );
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    typeof payload.repository !== "string" ||
+    typeof payload.buildCommand !== "string"
+  ) {
+    return json(
+      {
+        error: "INVALID_INFRASTRUCTURE_REQUEST",
+        message: "Pages request must include repository and buildCommand."
+      },
+      400
+    );
+  }
+
+  try {
+    const token = await getInstallationToken(env);
+    const result = await provisionBrownfieldPages(
+      token,
+      env,
+      claims.repository,
+      payload
+    );
+    return json(
+      {
+        status: "PROVISIONED",
+        infrastructure: result
+      },
+      200
+    );
+  } catch (error) {
+    console.error(
+      "Brownfield Pages provisioning failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
+
+    if (error instanceof BrownfieldPagesProvisioningError) {
+      const conflictCodes = new Set([
+        "REPOSITORY_MISMATCH",
+        "PAGES_PROJECT_NAME_FORBIDDEN",
+        "INFRASTRUCTURE_MARKER_MISMATCH",
+        "CLOUDFLARE_PAGES_CONFLICT"
+      ]);
+
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_TOKEN_PERMISSION_REQUIRED"
+          ? 502
+          : conflictCodes.has(error.code)
+            ? 409
+            : 400
+      );
+    }
+
+    return json(
+      {
+        error: "PAGES_PROVISIONING_FAILED",
+        message:
+          env.ENVIRONMENT === "production"
+            ? "Pages provisioning failed. Check AppFactory logs for details."
+            : error instanceof Error
+              ? error.message
+              : "Pages provisioning failed."
+      },
+      500
+    );
+  }
+}
+
 async function provisionExistingPagesD1(
   request: Request,
   env: Env,
@@ -950,6 +1056,7 @@ export default {
       request.method === "POST" &&
       (
         url.pathname === "/infrastructure/worker" ||
+        url.pathname === "/infrastructure/pages" ||
         url.pathname === "/infrastructure/pages-d1" ||
         url.pathname === "/infrastructure/hyperdrive"
       )
@@ -984,6 +1091,14 @@ export default {
           401
         );
       }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/infrastructure/pages" &&
+      infrastructureClaims
+    ) {
+      return provisionExistingPages(request, env, infrastructureClaims);
     }
 
     if (

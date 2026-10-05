@@ -99,6 +99,8 @@ jobs:
         run: npm run test:cloudflare-worker-bootstrap
       - name: Validate Cloudflare credential routing
         run: npm run test:cloudflare-credential-routing
+      - name: Validate brownfield Pages provisioning contract
+        run: npm run test:brownfield-pages
       - name: Validate Workers Builds token refresh
         run: npm run test:cloudflare-build-token
       - name: Validate Workers Builds failure diagnostics

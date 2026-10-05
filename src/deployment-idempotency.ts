@@ -9,10 +9,15 @@ const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 
 function assertConfig(env: Env): asserts env is Env & {
   CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_API_TOKEN: string;
 } {
-  if (!env.CLOUDFLARE_ACCOUNT_ID) throw new Error("Missing CLOUDFLARE_ACCOUNT_ID Worker runtime variable.");
-  if (!env.CLOUDFLARE_API_TOKEN) throw new Error("Missing CLOUDFLARE_API_TOKEN Worker secret.");
+  if (!env.CLOUDFLARE_ACCOUNT_ID) {
+    throw new Error("Missing CLOUDFLARE_ACCOUNT_ID Worker runtime variable.");
+  }
+  if (!env.CLOUDFLARE_PAGES_D1_TOKEN && !env.CLOUDFLARE_API_TOKEN) {
+    throw new Error(
+      "Missing Cloudflare Pages resource credential. Configure CLOUDFLARE_PAGES_D1_TOKEN or the legacy CLOUDFLARE_API_TOKEN fallback."
+    );
+  }
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -25,9 +30,10 @@ async function listDeployments(
 ): Promise<CloudflarePagesDeployment[]> {
   assertConfig(env);
   const path = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(project.name)}/deployments?per_page=25`;
+  const apiToken = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
   const response = await fetch(`${CLOUDFLARE_API}${path}`, {
     headers: {
-      Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+      Authorization: `Bearer ${apiToken}`,
       "Content-Type": "application/json"
     }
   });

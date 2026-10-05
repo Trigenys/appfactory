@@ -237,3 +237,14 @@ The first supported brownfield recipe is deliberately narrow:
 - AppFactory deliberately separates Cloudflare resource authorization from Workers Builds authorization: resource calls prefer `CLOUDFLARE_PAGES_D1_TOKEN`, while `/builds/*` calls keep using the user-scoped `CLOUDFLARE_API_TOKEN`. This matches Cloudflare's current API constraint that Workers Builds requires a user-scoped token. Creating a brand-new Worker uses the explicit Worker resource API and requires Workers product-level Admin; bootstrap code is uploaded only after the resource exists. If bootstrap upload fails, AppFactory removes the empty Worker so retries stay idempotent.
 
 This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.
+
+### Brownfield Pages self-service
+
+Existing Trigenys repositories can provision a secondary Cloudflare Pages site through `POST /infrastructure/pages` from the canonical `.github/workflows/appfactory-infrastructure.yml` workflow.
+
+The endpoint keeps Cloudflare credentials inside AppFactory, verifies the caller repository through GitHub Actions OIDC, creates or reconciles the GitHub-connected Pages project, applies repository-owned build settings, optionally attaches a custom domain and records ownership in `.appfactory/pages-infrastructure.json`.
+
+This allows a mobile, desktop, service or webapp repository to expose a public landing or documentation surface without changing its primary AppFactory project type. External DNS remains an explicit boundary: AppFactory returns the required CNAME target when the authoritative DNS provider is outside Cloudflare.
+
+See [Brownfield Cloudflare Pages](docs/brownfield-pages.md).
+
