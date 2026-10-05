@@ -1,6 +1,7 @@
 import type {
   CloudflareApiResponse,
   CloudflarePagesDeployment,
+  CloudflarePagesDomain,
   CloudflarePagesProject,
   Env,
   GitHubRepository
@@ -8,7 +9,16 @@ import type {
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 
-class CloudflareApiError extends Error {
+export interface PagesProjectOptions {
+  projectName?: string;
+  productionBranch?: string;
+  buildCommand?: string;
+  destinationDir?: string;
+  rootDir?: string;
+  previewDeploymentSetting?: "all" | "none" | "custom";
+}
+
+export class CloudflarePagesApiError extends Error {
   constructor(
     readonly status: number,
     readonly path: string,
@@ -18,16 +28,23 @@ class CloudflareApiError extends Error {
   }
 }
 
+function pagesApiToken(env: Env): string {
+  const token = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
+  if (!token) {
+    throw new Error(
+      "Missing Cloudflare Pages resource credential. Configure CLOUDFLARE_PAGES_D1_TOKEN or the legacy CLOUDFLARE_API_TOKEN fallback."
+    );
+  }
+  return token;
+}
+
 function assertCloudflareConfig(env: Env): asserts env is Env & {
   CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_API_TOKEN: string;
 } {
   if (!env.CLOUDFLARE_ACCOUNT_ID) {
     throw new Error("Missing CLOUDFLARE_ACCOUNT_ID Worker runtime variable.");
   }
-  if (!env.CLOUDFLARE_API_TOKEN) {
-    throw new Error("Missing CLOUDFLARE_API_TOKEN Worker secret.");
-  }
+  pagesApiToken(env);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -41,13 +58,17 @@ async function parseCloudflareResponse<T>(
   const text = await response.text();
 
   if (!text.trim()) {
-    throw new CloudflareApiError(response.status, path, "Cloudflare returned an empty response body.");
+    throw new CloudflarePagesApiError(
+      response.status,
+      path,
+      "Cloudflare returned an empty response body."
+    );
   }
 
   try {
     return JSON.parse(text) as CloudflareApiResponse<T>;
   } catch {
-    throw new CloudflareApiError(
+    throw new CloudflarePagesApiError(
       response.status,
       path,
       `Cloudflare returned malformed JSON: ${text.slice(0, 300)}`
@@ -63,7 +84,7 @@ async function cloudflareRequest<T>(
   assertCloudflareConfig(env);
 
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${env.CLOUDFLARE_API_TOKEN}`);
+  headers.set("Authorization", `Bearer ${pagesApiToken(env)}`);
   if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -78,7 +99,7 @@ async function cloudflareRequest<T>(
     const detail =
       payload.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") ||
       `HTTP ${response.status}`;
-    throw new CloudflareApiError(response.status, path, detail);
+    throw new CloudflarePagesApiError(response.status, path, detail);
   }
 
   return payload.result;
@@ -138,10 +159,11 @@ async function getPagesProjectIfPresent(
       return verifyProjectSource(existing, repository);
     } catch (error) {
       lastError = error;
-      if (error instanceof CloudflareApiError && error.status === 404) return null;
+      if (error instanceof CloudflarePagesApiError && error.status === 404) return null;
       if (
-        error instanceof CloudflareApiError &&
-        (error.detail.includes("empty response body") || error.detail.includes("malformed JSON")) &&
+        error instanceof CloudflarePagesApiError &&
+        (error.detail.includes("empty response body") ||
+          error.detail.includes("malformed JSON")) &&
         attempt === 0
       ) {
         await sleep(500);
@@ -158,46 +180,115 @@ async function getLatestPagesDeployment(
   env: Env,
   project: CloudflarePagesProject
 ): Promise<CloudflarePagesDeployment | null> {
-  const path = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID || "")}/pages/projects/${encodeURIComponent(project.name)}/deployments?per_page=1`;
+  const path =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID || "")}/pages/projects/${encodeURIComponent(project.name)}/deployments?per_page=1`;
   const deployments = await cloudflareRequest<CloudflarePagesDeployment[]>(env, path);
   return deployments[0] || null;
 }
 
-export async function ensurePagesProject(
-  env: Env,
-  repository: GitHubRepository
-): Promise<CloudflarePagesProject> {
-  assertCloudflareConfig(env);
-  const source = expectedGitHubSource(repository);
-  const projectName = repository.name;
-  const projectPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(projectName)}`;
-  const existing = await getPagesProjectIfPresent(env, projectPath, repository);
-  if (existing) return existing;
+function resolveProjectOptions(
+  repository: GitHubRepository,
+  options: PagesProjectOptions
+): Required<PagesProjectOptions> {
+  return {
+    projectName: options.projectName || repository.name,
+    productionBranch: options.productionBranch || repository.default_branch || "main",
+    buildCommand: options.buildCommand || "npm run build",
+    destinationDir: options.destinationDir || "dist",
+    rootDir: options.rootDir || "/",
+    previewDeploymentSetting: options.previewDeploymentSetting || "all"
+  };
+}
 
-  const collectionPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects`;
-  const body = JSON.stringify({
-    name: projectName,
-    production_branch: repository.default_branch || "main",
+function desiredProjectPayload(
+  repository: GitHubRepository,
+  options: Required<PagesProjectOptions>
+) {
+  const source = expectedGitHubSource(repository);
+
+  return {
+    name: options.projectName,
+    production_branch: options.productionBranch,
     build_config: {
-      build_command: "npm run build",
-      destination_dir: "dist",
-      root_dir: "/"
+      build_command: options.buildCommand,
+      destination_dir: options.destinationDir,
+      root_dir: options.rootDir
     },
     source: {
-      type: "github",
+      type: "github" as const,
       config: {
         owner: source.owner,
         owner_id: source.ownerId,
         repo_id: source.repoId,
         repo_name: source.repoName,
-        production_branch: repository.default_branch || "main",
+        production_branch: options.productionBranch,
         production_deployments_enabled: true,
-        preview_deployment_setting: "all",
+        preview_deployment_setting: options.previewDeploymentSetting,
         pr_comments_enabled: true
       }
     }
+  };
+}
+
+function projectNeedsReconcile(
+  project: CloudflarePagesProject,
+  options: Required<PagesProjectOptions>
+): boolean {
+  const source = project.source?.config;
+  const build = project.build_config;
+
+  return (
+    project.production_branch !== options.productionBranch ||
+    build?.build_command !== options.buildCommand ||
+    build?.destination_dir !== options.destinationDir ||
+    build?.root_dir !== options.rootDir ||
+    source?.production_branch !== options.productionBranch ||
+    source?.production_deployments_enabled !== true ||
+    source?.preview_deployment_setting !== options.previewDeploymentSetting ||
+    source?.pr_comments_enabled !== true
+  );
+}
+
+async function reconcilePagesProject(
+  env: Env,
+  projectPath: string,
+  project: CloudflarePagesProject,
+  repository: GitHubRepository,
+  options: Required<PagesProjectOptions>
+): Promise<CloudflarePagesProject> {
+  if (!projectNeedsReconcile(project, options)) return project;
+
+  const desired = desiredProjectPayload(repository, options);
+  const updated = await cloudflareRequest<CloudflarePagesProject>(env, projectPath, {
+    method: "PATCH",
+    body: JSON.stringify({
+      production_branch: desired.production_branch,
+      build_config: desired.build_config,
+      source: desired.source
+    })
   });
 
+  return verifyProjectSource(updated, repository);
+}
+
+export async function ensurePagesProject(
+  env: Env,
+  repository: GitHubRepository,
+  options: PagesProjectOptions = {}
+): Promise<CloudflarePagesProject> {
+  assertCloudflareConfig(env);
+  const resolved = resolveProjectOptions(repository, options);
+  const projectPath =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(resolved.projectName)}`;
+  const existing = await getPagesProjectIfPresent(env, projectPath, repository);
+
+  if (existing) {
+    return reconcilePagesProject(env, projectPath, existing, repository, resolved);
+  }
+
+  const collectionPath =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects`;
+  const body = JSON.stringify(desiredProjectPayload(repository, resolved));
   let lastError: unknown;
 
   // A newly generated private repository can take a few seconds to become visible
@@ -211,12 +302,13 @@ export async function ensurePagesProject(
       });
     } catch (error) {
       lastError = error;
-      if (!(error instanceof CloudflareApiError)) throw error;
+      if (!(error instanceof CloudflarePagesApiError)) throw error;
 
       const ambiguousSuccess =
         error.status >= 200 &&
         error.status < 300 &&
-        (error.detail.includes("empty response body") || error.detail.includes("malformed JSON"));
+        (error.detail.includes("empty response body") ||
+          error.detail.includes("malformed JSON"));
 
       if (
         ambiguousSuccess ||
@@ -225,7 +317,9 @@ export async function ensurePagesProject(
         error.status >= 500
       ) {
         const created = await getPagesProjectIfPresent(env, projectPath, repository);
-        if (created) return created;
+        if (created) {
+          return reconcilePagesProject(env, projectPath, created, repository, resolved);
+        }
       }
 
       if ((ambiguousSuccess || error.status >= 500) && attempt < 3) {
@@ -240,6 +334,44 @@ export async function ensurePagesProject(
   throw lastError;
 }
 
+export async function ensurePagesCustomDomain(
+  env: Env,
+  project: CloudflarePagesProject,
+  domain: string
+): Promise<CloudflarePagesDomain> {
+  assertCloudflareConfig(env);
+  const collectionPath =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(project.name)}/domains`;
+
+  const domains = await cloudflareRequest<CloudflarePagesDomain[]>(env, collectionPath);
+  const existing = domains.find(
+    (candidate) => candidate.name.toLowerCase() === domain.toLowerCase()
+  );
+  if (existing) return existing;
+
+  try {
+    return await cloudflareRequest<CloudflarePagesDomain>(env, collectionPath, {
+      method: "POST",
+      body: JSON.stringify({ name: domain })
+    });
+  } catch (error) {
+    if (
+      error instanceof CloudflarePagesApiError &&
+      (error.status === 400 || error.status === 409)
+    ) {
+      const refreshed = await cloudflareRequest<CloudflarePagesDomain[]>(
+        env,
+        collectionPath
+      );
+      const created = refreshed.find(
+        (candidate) => candidate.name.toLowerCase() === domain.toLowerCase()
+      );
+      if (created) return created;
+    }
+    throw error;
+  }
+}
+
 export async function triggerPagesDeployment(
   env: Env,
   project: CloudflarePagesProject,
@@ -247,7 +379,8 @@ export async function triggerPagesDeployment(
 ): Promise<CloudflarePagesDeployment> {
   assertCloudflareConfig(env);
 
-  const deploymentPath = `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(project.name)}/deployments`;
+  const deploymentPath =
+    `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects/${encodeURIComponent(project.name)}/deployments`;
   const form = new FormData();
   form.set("branch", branch);
 
@@ -257,12 +390,13 @@ export async function triggerPagesDeployment(
       body: form
     });
   } catch (error) {
-    if (!(error instanceof CloudflareApiError)) throw error;
+    if (!(error instanceof CloudflarePagesApiError)) throw error;
 
     const ambiguousSuccess =
       error.status >= 200 &&
       error.status < 300 &&
-      (error.detail.includes("empty response body") || error.detail.includes("malformed JSON"));
+      (error.detail.includes("empty response body") ||
+        error.detail.includes("malformed JSON"));
 
     if (ambiguousSuccess || error.status >= 500) {
       await sleep(750);
