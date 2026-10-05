@@ -26,5 +26,8 @@ test("reviewed packaging recipe changes update the marker instead of changing Wo
   assert.match(source, /const recipeChanged = Boolean/);
   assert.match(source, /marker\.buildCommand !== expectedMarker\.buildCommand/);
   assert.match(source, /marker\.deployCommand !== expectedMarker\.deployCommand/);
-  assert.match(source, /recipeChanged[\s\S]*?writeMarker\(githubToken, repository, expectedMarker, markerFile\?\.sha\)/);
+  assert.match(
+    source,
+    /recipeChanged[\s\S]*?writeMarker\([\s\S]*?githubToken,[\s\S]*?repository,[\s\S]*?expectedMarker,[\s\S]*?workerMarkerPath\(request\.environment\),[\s\S]*?markerFile\?\.sha/
+  );
 });
