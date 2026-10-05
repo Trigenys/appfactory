@@ -19,7 +19,8 @@
     "test:hyperdrive-provisioning": "node --test test/hyperdrive-provisioning.test.mjs",
     "test:worker-migration-gate": "node --test test/worker-migration-gate.test.mjs",
     "test:worker-readiness-gate": "node --test test/worker-readiness-gate.test.mjs",
-    "test:brownfield-pages": "node --test test/brownfield-pages.test.mjs"
+    "test:brownfield-pages": "node --test test/brownfield-pages.test.mjs",
+    "test:infrastructure-environments": "node --test test/infrastructure-environments.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
