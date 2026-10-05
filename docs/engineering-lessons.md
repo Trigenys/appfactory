@@ -23,3 +23,12 @@ This file is the AppFactory-level RAIDER failure-memory log. Significant failure
 **Fix:** use `printf` with a single-quoted format string.
 
 **Prevention rule:** GitHub Actions shell steps that emit Markdown must not place Markdown backticks inside double-quoted shell strings.
+
+
+## 2026-10-05 — A configured secret is not proof that a requested profile exists
+
+**What happened:** the first Editorial OS staging reconciliation proved that AppFactory had a non-empty `HYPERDRIVE_DATABASE_PROFILES` secret, but Hyperdrive provisioning still failed because the requested staging profile was absent or malformed. The original error merged both cases.
+
+**Fix:** profile lookup now distinguishes an absent profile key from a malformed configured profile and reports only sorted profile names. Credential fields are never returned.
+
+**Prevention rule:** health checks for structured secret registries must separate “registry configured” from “requested entry valid”. Diagnostics may expose non-sensitive keys, never credential values.
