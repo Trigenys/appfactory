@@ -248,3 +248,18 @@ This allows a mobile, desktop, service or webapp repository to expose a public l
 
 See [Brownfield Cloudflare Pages](docs/brownfield-pages.md).
 
+
+
+### Environment-aware Cloudflare infrastructure
+
+Brownfield Worker and Hyperdrive self-service accepts an optional `environment` of `production` or `staging` (default `production`). Production identity remains backward compatible. Staging uses isolated deterministic identities:
+
+```text
+Worker:     <repo>-staging-api
+Hyperdrive: <repo>-staging
+DB profile: <repo>-staging
+markers:    .appfactory/worker-infrastructure.staging.json
+            .appfactory/hyperdrive.staging.json
+```
+
+Database credentials still live only in AppFactory's central `HYPERDRIVE_DATABASE_PROFILES`; callers never submit host/user/password fields.
