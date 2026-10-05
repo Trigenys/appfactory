@@ -493,7 +493,7 @@ type ValidatedWorkerMigrationGate = {
 };
 
 type ValidatedBrownfieldWorkerRequest =
-  Required<Pick<BrownfieldWorkerRequest, "repository" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
+  Required<Pick<BrownfieldWorkerRequest, "repository" | "environment" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
   Omit<BrownfieldWorkerRequest, "migration"> & {
     migration?: ValidatedWorkerMigrationGate;
   };
@@ -1212,6 +1212,7 @@ export async function provisionBrownfieldWorker(
       marker.provider !== expectedMarker.provider ||
       marker.repository !== expectedMarker.repository ||
       marker.workerName !== expectedMarker.workerName ||
+      (marker.environment || "production") !== request.environment ||
       marker.rootDirectory !== expectedMarker.rootDirectory
     )
   ) {
