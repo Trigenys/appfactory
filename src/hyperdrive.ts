@@ -888,6 +888,13 @@ export async function provisionHyperdrive(
   );
 
   const profiles = parseProfiles(env);
+  if (!(request.profile in profiles)) {
+    const availableProfiles = Object.keys(profiles).sort();
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_DATABASE_PROFILE_NOT_FOUND",
+      `Database profile ${request.profile} is not configured. Available managed profiles: ${availableProfiles.length > 0 ? availableProfiles.join(", ") : "(none)"}.`
+    );
+  }
   const profile = validateProfile(request.profile, profiles[request.profile]);
   const markerFile = await readHyperdriveMarker(
     githubToken,
