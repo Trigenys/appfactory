@@ -1,0 +1,10 @@
+{
+  "name": "Trigenys Commerce Factory",
+  "slug": "trigenys-commerce-factory",
+  "projectType": "webapp",
+  "preset": "react-vite",
+  "private": false,
+  "description": "Generate lightweight, conversion-first ecommerce storefronts with WhatsApp ordering and social commerce integrations.",
+  "brief": "A lightweight commerce platform for African SMEs, Instagram sellers and WhatsApp-first merchants. Merchants create a branded storefront, add products, publish quickly and receive customer orders through prefilled WhatsApp messages instead of requiring a traditional checkout. MVP priorities: merchant onboarding, product catalog, storefront themes, product pages, WhatsApp order CTA, basic analytics and deployable storefronts. Architecture should leave clean extension points for Meta Pixel, Meta Catalog, Facebook and Instagram synchronization, custom domains, social sharing and future ads automation. The product itself is a web app/SaaS, not merely a static landing page.",
+  "language": "en"
+}
