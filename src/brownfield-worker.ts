@@ -32,7 +32,7 @@ const TYPESCRIPT_WRANGLER_BUILD_COMMAND =
 const TYPESCRIPT_WRANGLER_DEPLOY_COMMAND =
   "./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars";
 const ALEMBIC_MIGRATION_COMMAND =
-  'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" . "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" && "$MIGRATION_VENV/bin/alembic" upgrade head';
+  'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" --no-deps . && uv pip install --python "$MIGRATION_VENV/bin/python" "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" "sqlalchemy>=2,<2.1" "pydantic-settings>=2,<3" && "$MIGRATION_VENV/bin/alembic" upgrade head';
 
 interface WorkerScript {
   id: string;
