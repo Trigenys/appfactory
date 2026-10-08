@@ -123,7 +123,7 @@ export async function probeWorkerReadiness(
   const endpoint = `${baseUrl}/health`;
   const readinessEndpoint = `${baseUrl}/health/ready`;
   const maxAttempts = options.attempts ?? DEFAULT_READINESS_ATTEMPTS;
-  const intervalMs = options.intervalMs ?? 2000;
+  const intervalMs = options.intervalMs ?? 5000;
   let lastEvidence = deployedAfterFailedProbe(endpoint, 0);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
