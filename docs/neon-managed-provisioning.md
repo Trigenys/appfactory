@@ -22,7 +22,7 @@ selon la politique de sécurité.
 ## Architecture
 
 ```text
-GitHub Actions OIDC (workflow approuvé, main, dispatch manuel)
+GitHub Actions OIDC (workflow canonique, main, push ou dispatch)
     |
     | POST /infrastructure/neon
     v
@@ -59,13 +59,12 @@ Body autorisé (uniquement ce champ) :
 
 Conditions obligatoires :
 - certificat JWT issu de GitHub, valide, audience attendue et `refs/heads/main` ;
-- événement **`workflow_dispatch`** (jamais un PR, `push` ou `schedule`) ;
-- workflow officiel `.github/workflows/appfactory-infrastructure.yml`,
-  ou pour SEO Monitor `.github/workflows/seo-monitor.yml` ;
+- workflow officiel `.github/workflows/appfactory-infrastructure.yml` : événement `push` sur `main` ou `workflow_dispatch` ;
+- l'identité exceptionnelle `.github/workflows/seo-monitor.yml` reste limitée à `workflow_dispatch` ;
 - repo présent dans la liste blanche côté AppFactory ;
 - aucun projectId, secretName, workerName ni URL fourni dans la requête.
 
-Si le secret Cloudflare cible existe déjà, renvoie `ALREADY_CONFIGURED`
+Le `push` ne suffit pas à autoriser une cible : le dépôt doit aussi être présent dans la liste blanche serveur AppFactory. Si le secret Cloudflare cible existe déjà, renvoie `ALREADY_CONFIGURED`
 **sans le remplacer** et sans appeler Neon. Les rotations doivent être
 explicitement traitées séparément.
 
