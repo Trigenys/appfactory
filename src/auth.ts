@@ -324,9 +324,10 @@ export async function authenticateDatabaseLease(
 }
 
 /**
- * Stateful Neon provisioning may run only on explicitly dispatched, main
- * branch workflows. Both supported workflow identities are pinned to their
- * canonical workflow files; the Neon target itself is separately allowlisted.
+ * Stateful Neon provisioning is pinned to protected main and exact workflow
+ * identities. Canonical infrastructure workflows may reconcile approved
+ * targets on a main push or an explicit dispatch. The exceptional SEO
+ * collector identity remains dispatch-only.
  */
 export async function authenticateNeonProvisioning(
   request: Request,
@@ -335,26 +336,45 @@ export async function authenticateNeonProvisioning(
   const { claims, expectedRef } = await verifyOidcToken(request, env);
   const repository = claims.repository || "";
   const owner = env.GITHUB_OWNER || "Trigenys";
-  if (!repository.startsWith(owner + "/") || claims.event_name !== "workflow_dispatch") {
+
+  if (!repository.startsWith(owner + "/")) {
     throw new AuthenticationError(
       403,
       "NEON_PROVISIONER_FORBIDDEN",
-      "Neon provisioning requires an explicitly dispatched Trigenys workflow."
+      "Neon provisioning is restricted to repositories owned by the configured organization."
     );
   }
+
   const canonicalInfra =
     repository + "/.github/workflows/appfactory-infrastructure.yml@" + expectedRef;
   const seoCollector =
     "Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@" + expectedRef;
-  if (
-    claims.workflow_ref !== canonicalInfra &&
-    !(repository === "Trigenys/trigenys-seo-monitor" && claims.workflow_ref === seoCollector)
-  ) {
+  const canonicalInfrastructureCaller = claims.workflow_ref === canonicalInfra;
+  const seoCollectorCaller =
+    repository === "Trigenys/trigenys-seo-monitor" &&
+    claims.workflow_ref === seoCollector;
+
+  if (!canonicalInfrastructureCaller && !seoCollectorCaller) {
     throw new AuthenticationError(
       403,
       "NEON_PROVISIONER_WORKFLOW_FORBIDDEN",
       "Neon provisioning is restricted to canonical workflows on main."
     );
   }
+
+  const canonicalEventAllowed =
+    claims.event_name === "workflow_dispatch" || claims.event_name === "push";
+  const seoEventAllowed = claims.event_name === "workflow_dispatch";
+  if (
+    (canonicalInfrastructureCaller && !canonicalEventAllowed) ||
+    (seoCollectorCaller && !seoEventAllowed)
+  ) {
+    throw new AuthenticationError(
+      403,
+      "NEON_PROVISIONER_EVENT_FORBIDDEN",
+      "Neon provisioning event is not allowed for this workflow identity."
+    );
+  }
+
   return claims;
 }
