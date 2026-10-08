@@ -292,3 +292,33 @@ export async function authenticateInfrastructureMutation(
 
   return claims;
 }
+
+/**
+ * Database access is narrower than generic infrastructure provisioning:
+ * only the SEO Monitor collector on main, for scheduled or manually
+ * dispatched collection. No other Trigenys repo may request this credential.
+ */
+export async function authenticateDatabaseLease(
+  request: Request,
+  env: Env
+): Promise<GitHubOidcClaims> {
+  const { claims, expectedRef } = await verifyOidcToken(request, env);
+  const allowedRepo = "Trigenys/trigenys-seo-monitor";
+  const allowedWorkflow =
+    `${allowedRepo}/.github/workflows/seo-monitor.yml@${expectedRef}`;
+  if (claims.repository !== allowedRepo || claims.workflow_ref !== allowedWorkflow) {
+    throw new AuthenticationError(
+      403,
+      "DATABASE_LEASE_CALLER_FORBIDDEN",
+      "Database access is restricted to the SEO Monitor workflow on main."
+    );
+  }
+  if (claims.event_name !== "schedule" && claims.event_name !== "workflow_dispatch") {
+    throw new AuthenticationError(
+      403,
+      "DATABASE_LEASE_EVENT_FORBIDDEN",
+      "Database leases are available only to scheduled or manually dispatched monitoring jobs."
+    );
+  }
+  return claims;
+}
