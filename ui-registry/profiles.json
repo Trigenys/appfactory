@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "profiles": {
+    "editorial-lifestyle-premium": {
+      "label": "Editorial Lifestyle Premium",
+      "description": "Hospitality, lifestyle and premium retail",
+      "tokens": {
+        "bg": "#f7f4ec",
+        "surface": "#ffffff",
+        "text": "#19372c",
+        "muted": "#54665b",
+        "accent": "#185b40",
+        "border": "#dcded3",
+        "radius": "18px"
+      }
+    },
+    "tech-commerce-premium": {
+      "label": "Tech Commerce Premium",
+      "description": "Product-first ecommerce, electronics and hardware",
+      "tokens": {
+        "bg": "#f7f9fc",
+        "surface": "#ffffff",
+        "text": "#161e2d",
+        "muted": "#596376",
+        "accent": "#d92730",
+        "border": "#e1e5ec",
+        "radius": "16px"
+      }
+    },
+    "professional-service-premium": {
+      "label": "Professional Service Premium",
+      "description": "Credible B2B, finance and professional services",
+      "tokens": {
+        "bg": "#f5f9fc",
+        "surface": "#ffffff",
+        "text": "#142c49",
+        "muted": "#547087",
+        "accent": "#087a76",
+        "border": "#dbe7ed",
+        "radius": "14px"
+      }
+    },
+    "academic-institutional-premium": {
+      "label": "Academic Institutional Premium",
+      "description": "Institutions, education and skills platforms",
+      "tokens": {
+        "bg": "#f7fbf8",
+        "surface": "#ffffff",
+        "text": "#123b2e",
+        "muted": "#5b7168",
+        "accent": "#08764c",
+        "border": "#dce8df",
+        "radius": "16px"
+      }
+    }
+  }
+}

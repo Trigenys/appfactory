@@ -1,0 +1,59 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "trigenys-ui",
+  "homepage": "https://github.com/Trigenys/appfactory",
+  "items": [
+    {
+      "name": "trigenys-button",
+      "type": "registry:ui",
+      "title": "Trigenys Button",
+      "description": "Accessible primary and secondary buttons",
+      "files": [
+        {
+          "path": "ui-registry/components/UiButton.tsx",
+          "type": "registry:ui",
+          "target": "src/components/ui/UiButton.tsx"
+        }
+      ]
+    },
+    {
+      "name": "trigenys-card",
+      "type": "registry:ui",
+      "title": "Trigenys Card",
+      "description": "Neutral responsive content card",
+      "files": [
+        {
+          "path": "ui-registry/components/UiCard.tsx",
+          "type": "registry:ui",
+          "target": "src/components/ui/UiCard.tsx"
+        }
+      ]
+    },
+    {
+      "name": "trigenys-whatsapp-cta",
+      "type": "registry:ui",
+      "title": "Trigenys WhatsApp CTA",
+      "description": "WhatsApp ordering link for storefronts",
+      "files": [
+        {
+          "path": "ui-registry/components/WhatsAppCta.tsx",
+          "type": "registry:ui",
+          "target": "src/components/ui/WhatsAppCta.tsx"
+        }
+      ]
+    },
+    {
+      "name": "trigenys-base-styles",
+      "type": "registry:style",
+      "title": "Trigenys UI styles",
+      "description": "Shared component CSS",
+      "files": [
+        {
+          "path": "ui-registry/components/ui.css",
+          "type": "registry:style",
+          "target": "src/components/ui/ui.css"
+        }
+      ]
+    }
+  ]
+}
