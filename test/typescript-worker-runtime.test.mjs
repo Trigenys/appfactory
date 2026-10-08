@@ -17,7 +17,7 @@ test("TypeScript/Wrangler is an explicit reusable brownfield runtime", () => {
 test("TypeScript runtime uses one reviewed deterministic recipe", () => {
   assert.match(
     source,
-    /TYPESCRIPT_WRANGLER_BUILD_COMMAND =\s*\n\s*"npm ci --ignore-scripts && npm run check"/
+    /TYPESCRIPT_WRANGLER_BUILD_COMMAND =\s*\n\s*"npm install --ignore-scripts --no-audit --no-fund && npm run check"/
   );
   assert.match(
     source,

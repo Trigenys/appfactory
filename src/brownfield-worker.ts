@@ -28,7 +28,7 @@ const RUNTIME_ONLY_BUILD_COMMAND =
 const RUNTIME_ONLY_DEPLOY_COMMAND =
   "bash scripts/package_worker.sh deploy wrangler.production.toml";
 const TYPESCRIPT_WRANGLER_BUILD_COMMAND =
-  "npm ci --ignore-scripts && npm run check";
+  "npm install --ignore-scripts --no-audit --no-fund && npm run check";
 const TYPESCRIPT_WRANGLER_DEPLOY_COMMAND =
   "./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars";
 const ALEMBIC_MIGRATION_COMMAND =
