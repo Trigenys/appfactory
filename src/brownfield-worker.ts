@@ -27,6 +27,10 @@ const RUNTIME_ONLY_BUILD_COMMAND =
   "bash scripts/package_worker.sh dry-run wrangler.production.toml ../worker-dist-production";
 const RUNTIME_ONLY_DEPLOY_COMMAND =
   "bash scripts/package_worker.sh deploy wrangler.production.toml";
+const TYPESCRIPT_WRANGLER_BUILD_COMMAND =
+  "npm ci --ignore-scripts && npm run check";
+const TYPESCRIPT_WRANGLER_DEPLOY_COMMAND =
+  "./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars";
 const ALEMBIC_MIGRATION_COMMAND =
   'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" . "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" && "$MIGRATION_VENV/bin/alembic" upgrade head';
 
@@ -92,11 +96,16 @@ interface GitHubFile {
   encoding: string;
 }
 
+export type BrownfieldWorkerRuntime =
+  | "python-pywrangler"
+  | "typescript-wrangler";
+
 interface WorkerMarker {
   schemaVersion: number;
   provider: "cloudflare-workers-builds";
   repository: string;
   workerName: string;
+  runtime?: BrownfieldWorkerRuntime;
   rootDirectory: string;
   buildCommand: string;
   deployCommand: string;
@@ -120,6 +129,7 @@ export interface WorkerMigrationGate {
 export interface BrownfieldWorkerRequest {
   repository: string;
   environment?: InfrastructureEnvironment;
+  runtime?: BrownfieldWorkerRuntime;
   workerName?: string;
   rootDirectory?: string;
   buildCommand?: string;
@@ -134,6 +144,7 @@ export interface BrownfieldWorkerResult {
   repository: string;
   worker: {
     name: string;
+    runtime: BrownfieldWorkerRuntime;
     tag: string;
     created: boolean;
     url: string;
@@ -493,7 +504,7 @@ type ValidatedWorkerMigrationGate = {
 };
 
 type ValidatedBrownfieldWorkerRequest =
-  Required<Pick<BrownfieldWorkerRequest, "repository" | "environment" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
+  Required<Pick<BrownfieldWorkerRequest, "repository" | "environment" | "runtime" | "workerName" | "rootDirectory" | "buildCommand" | "deployCommand">> &
   Omit<BrownfieldWorkerRequest, "migration"> & {
     migration?: ValidatedWorkerMigrationGate;
   };
@@ -517,6 +528,14 @@ function validateRequest(
     );
   }
 
+  const runtime = input.runtime || "python-pywrangler";
+  if (runtime !== "python-pywrangler" && runtime !== "typescript-wrangler") {
+    throw new BrownfieldWorkerProvisioningError(
+      "WORKER_RUNTIME_FORBIDDEN",
+      "Brownfield Worker runtime must use an AppFactory-reviewed recipe."
+    );
+  }
+
   const workerName = input.workerName || expectedWorkerName(repository, environment);
   if (workerName !== expectedWorkerName(repository, environment)) {
     throw new BrownfieldWorkerProvisioningError(
@@ -529,21 +548,41 @@ function validateRequest(
   if (rootDirectory !== "/backend") {
     throw new BrownfieldWorkerProvisioningError(
       "ROOT_DIRECTORY_FORBIDDEN",
-      "Brownfield Python Worker self-service currently allows only /backend."
+      "Brownfield Worker self-service currently allows only /backend."
     );
   }
 
-  const buildCommand = input.buildCommand || LEGACY_BUILD_COMMAND;
-  const deployCommand = input.deployCommand || LEGACY_DEPLOY_COMMAND;
+  const defaultBuildCommand =
+    runtime === "typescript-wrangler"
+      ? TYPESCRIPT_WRANGLER_BUILD_COMMAND
+      : LEGACY_BUILD_COMMAND;
+  const defaultDeployCommand =
+    runtime === "typescript-wrangler"
+      ? TYPESCRIPT_WRANGLER_DEPLOY_COMMAND
+      : LEGACY_DEPLOY_COMMAND;
+  const buildCommand = input.buildCommand || defaultBuildCommand;
+  const deployCommand = input.deployCommand || defaultDeployCommand;
 
-  const allowedRecipes = new Set([
-    `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
-    `${RUNTIME_ONLY_BUILD_COMMAND}\n${RUNTIME_ONLY_DEPLOY_COMMAND}`
-  ]);
+  const allowedRecipes =
+    runtime === "typescript-wrangler"
+      ? new Set([
+          `${TYPESCRIPT_WRANGLER_BUILD_COMMAND}\n${TYPESCRIPT_WRANGLER_DEPLOY_COMMAND}`
+        ])
+      : new Set([
+          `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
+          `${RUNTIME_ONLY_BUILD_COMMAND}\n${RUNTIME_ONLY_DEPLOY_COMMAND}`
+        ]);
   if (!allowedRecipes.has(`${buildCommand}\n${deployCommand}`)) {
     throw new BrownfieldWorkerProvisioningError(
       "BUILD_COMMAND_FORBIDDEN",
-      "Brownfield Worker commands must use one reviewed Python Worker deployment recipe without mixing build and deploy commands."
+      `Brownfield Worker commands must use a reviewed ${runtime} deployment recipe without mixing build and deploy commands.`
+    );
+  }
+
+  if (runtime === "typescript-wrangler" && input.migration) {
+    throw new BrownfieldWorkerProvisioningError(
+      "MIGRATION_RUNTIME_FORBIDDEN",
+      "The python-alembic migration gate is not valid for the TypeScript/Wrangler runtime."
     );
   }
 
@@ -576,6 +615,7 @@ function validateRequest(
     ...baseInput,
     repository: input.repository,
     environment,
+    runtime,
     workerName,
     rootDirectory,
     buildCommand,
@@ -1192,6 +1232,7 @@ export async function provisionBrownfieldWorker(
     provider: "cloudflare-workers-builds",
     repository: repository.full_name,
     workerName: request.workerName,
+    ...(request.runtime === "python-pywrangler" ? {} : { runtime: request.runtime }),
     rootDirectory: request.rootDirectory,
     buildCommand: request.buildCommand,
     deployCommand: request.deployCommand,
@@ -1212,6 +1253,7 @@ export async function provisionBrownfieldWorker(
       marker.provider !== expectedMarker.provider ||
       marker.repository !== expectedMarker.repository ||
       marker.workerName !== expectedMarker.workerName ||
+      (marker.runtime || "python-pywrangler") !== request.runtime ||
       (marker.environment || "production") !== request.environment ||
       marker.rootDirectory !== expectedMarker.rootDirectory
     )
@@ -1316,6 +1358,12 @@ export async function provisionBrownfieldWorker(
   );
 
   const buildVariables: Record<string, BuildEnvironmentVariable> = {};
+  if (request.runtime === "typescript-wrangler") {
+    buildVariables.NODE_VERSION = {
+      value: "24",
+      is_secret: false
+    };
+  }
   if (deployCommandRequiresBuildEnv) {
     buildVariables.APPFACTORY_DEPLOY_COMMAND = {
       value: releaseDeployCommand,
@@ -1402,6 +1450,7 @@ export async function provisionBrownfieldWorker(
     repository: repository.full_name,
     worker: {
       name: request.workerName,
+      runtime: request.runtime,
       tag: script.tag,
       created,
       url: workerUrl

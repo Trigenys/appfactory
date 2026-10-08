@@ -115,6 +115,8 @@ jobs:
         run: npm run test:database-lease
       - name: Validate Neon-to-Cloudflare secrets provisioning
         run: npm run test:neon-provisioning
+      - name: Validate TypeScript/Wrangler Worker runtime
+        run: npm run test:typescript-worker-runtime
       - name: Validate infrastructure environment isolation
         run: npm run test:infrastructure-environments
       - name: Validate Worker migration release gate
