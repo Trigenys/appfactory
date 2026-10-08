@@ -165,3 +165,18 @@ La valeur est un objet JSON de profil Hyperdrive contenant `origin.scheme`, `hos
 `appfactory-api`. Le secret dédié est prioritaire pour ce profil ; les autres projets
 continuent d'utiliser la map historique. Cela évite d'écraser des credentials existants
 lorsqu'un nouveau projet brownfield est raccordé.
+
+
+## Failure memory — propagation rôle → base Neon
+
+Le premier bootstrap réel de Commerce Factory a créé le rôle PostgreSQL
+`commerce_factory_owner`, puis Neon a renvoyé un conflit d'état HTTP 409
+lors de la création immédiate de la base utilisant ce rôle. Un rerun quelques
+secondes plus tard a réussi sans modification manuelle.
+
+AppFactory traite désormais uniquement ce `NEON_STATE_CONFLICT` précis sur
+la création de base comme transitoire : au maximum quatre tentatives avec un
+backoff court. Les conflits de propriétaire, les cibles non approuvées et les
+autres erreurs continuent d'échouer immédiatement. Cette stratégie évite de
+transformer un délai de propagation du control plane Neon en intervention
+humaine, sans masquer un vrai conflit d'infrastructure.
