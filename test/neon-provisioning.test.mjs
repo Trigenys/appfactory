@@ -216,8 +216,10 @@ test("Neon authentication, malformed URI and Cloudflare API errors never leak cr
 test("endpoint uses exact signed GitHub OIDC caller and never returns connection URI",()=>{
   assert.match(authSource,/authenticateNeonProvisioning/);
   assert.match(authSource,/verifyOidcToken\(request, env\)/);
-  assert.match(authSource,/claims\.event_name !== "workflow_dispatch"/);
-  assert.match(authSource,/claims\.workflow_ref !== canonicalInfra/);
+  assert.match(authSource,/canonicalInfrastructureCaller/);
+  assert.match(authSource,/claims\.event_name === "workflow_dispatch" \|\| claims\.event_name === "push"/);
+  assert.match(authSource,/seoEventAllowed = claims\.event_name === "workflow_dispatch"/);
+  assert.match(authSource,/NEON_PROVISIONER_EVENT_FORBIDDEN/);
   assert.match(indexSource,/url\.pathname === "\/infrastructure\/neon"/);
   assert.match(indexSource,/authenticateNeonProvisioning\(request, env\)/);
   assert.match(indexSource,/provisionApprovedNeon\(env, claims, body/);
