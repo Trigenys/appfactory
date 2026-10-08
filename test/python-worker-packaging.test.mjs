@@ -16,9 +16,11 @@ test("runtime-only Python Worker recipe is allowlisted", () => {
 });
 
 test("build and deploy commands must come from the same reviewed recipe", () => {
-  assert.match(source, /const allowedRecipes = new Set/);
+  assert.match(source, /const allowedRecipes =/);
+  assert.match(source, /runtime === "typescript-wrangler"/);
   assert.match(source, /LEGACY_BUILD_COMMAND.*LEGACY_DEPLOY_COMMAND/s);
   assert.match(source, /RUNTIME_ONLY_BUILD_COMMAND.*RUNTIME_ONLY_DEPLOY_COMMAND/s);
+  assert.match(source, /TYPESCRIPT_WRANGLER_BUILD_COMMAND.*TYPESCRIPT_WRANGLER_DEPLOY_COMMAND/s);
   assert.match(source, /without mixing build and deploy commands/);
 });
 
