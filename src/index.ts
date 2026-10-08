@@ -1,5 +1,7 @@
-import { AuthenticationError, authenticateDatabaseLease, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { AuthenticationError, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
 import { issueDatabaseLease, DatabaseLeaseError } from "./database-lease";
+import { provisionApprovedNeon, NeonProvisioningError } from "./neon-provisioning";
+import { listSecretNames, putSecret } from "./brownfield-worker";
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
@@ -1126,6 +1128,39 @@ export default {
       infrastructureClaims
     ) {
       return provisionExistingWorker(request, env, infrastructureClaims);
+    }
+
+    if (request.method === "POST" && url.pathname === "/infrastructure/neon") {
+      try {
+        const claims = await authenticateNeonProvisioning(request, env);
+        const body = await request.json() as unknown;
+        const result = await provisionApprovedNeon(env, claims, body, {
+          fetch: (url, init) => fetch(url, init),
+          listSecretNames,
+          putSecret
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store, private",
+            "pragma": "no-cache",
+            "x-content-type-options": "nosniff"
+          }
+        });
+      } catch (error) {
+        if (error instanceof AuthenticationError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        if (error instanceof NeonProvisioningError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        // Never log Neon API responses, Cloudflare API responses, passwords or URLs.
+        return json({
+          error: "NEON_PROVISIONING_FAILED",
+          message: "Neon infrastructure provisioning failed."
+        }, 502);
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/infrastructure/database-lease") {
