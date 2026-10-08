@@ -59,3 +59,16 @@ test("failed readiness probes preserve bounded non-secret diagnostics", () => {
   assert.match(worker, /probe_error=/);
   assert.doesNotMatch(readiness, /APPFACTORY_DATABASE_URL/);
 });
+
+
+test("database-backed readiness supports split liveness and readiness endpoints", () => {
+  assert.match(readiness, /const readinessEndpoint = `\$\{baseUrl\}\/health\/ready`/);
+  assert.match(readiness, /databaseConfigured === null/);
+  assert.match(readiness, /readinessStatus === "ready" \|\| readinessStatus === "ok"/);
+  assert.match(readiness, /databaseConfigured: true/);
+});
+
+test("readiness polling stays within Cloudflare Worker subrequest budget", () => {
+  assert.match(readiness, /const DEFAULT_READINESS_ATTEMPTS = 6/);
+  assert.match(readiness, /options\.attempts \?\? DEFAULT_READINESS_ATTEMPTS/);
+});
