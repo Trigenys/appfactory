@@ -1,0 +1,27 @@
+:root {
+  --tg-bg: __UI_BG__;
+  --tg-surface: __UI_SURFACE__;
+  --tg-text: __UI_TEXT__;
+  --tg-muted: __UI_MUTED__;
+  --tg-accent: __UI_ACCENT__;
+  --tg-border: __UI_BORDER__;
+  --tg-radius: __UI_RADIUS__;
+  color: var(--tg-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; }
+.tg-app-shell { min-height: 100vh; background: var(--tg-bg); }
+.tg-container { width: min(1100px, calc(100% - 2rem)); margin: 0 auto; padding: clamp(3rem, 9vw, 7rem) 0; }
+.tg-hero { max-width: 760px; padding-bottom: clamp(2.5rem, 6vw, 5rem); }
+.tg-eyebrow { color: var(--tg-accent); font-size: .82rem; letter-spacing: .11em; font-weight: 750; text-transform: uppercase; }
+h1 { font-size: clamp(2.8rem, 8vw, 6.3rem); line-height: 1.04; letter-spacing: -.045em; margin: 1rem 0; text-wrap: balance; }
+.tg-lede { color: var(--tg-muted); font-size: clamp(1.05rem, 2.7vw, 1.3rem); line-height: 1.65; margin-bottom: 2rem; }
+.tg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.tg-grid h2 { font-size: 1.13rem; margin: 0 0 1rem; }
+.tg-grid p { color: var(--tg-muted); line-height: 1.6; margin: 0; }
+@media (max-width: 760px) { .tg-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

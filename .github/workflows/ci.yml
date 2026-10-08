@@ -95,6 +95,8 @@ jobs:
         run: npm run test:project-blueprints
       - name: Validate managed blueprint upgrades
         run: npm run test:blueprint-upgrades
+      - name: Validate UI Registry contracts
+        run: npm run test:ui-registry
       - name: Validate Cloudflare Worker bootstrap contract
         run: npm run test:cloudflare-worker-bootstrap
       - name: Validate Cloudflare credential routing
@@ -199,5 +201,17 @@ jobs:
         working-directory: blueprints/react-vite
         run: |
           npm install --ignore-scripts
+          npm run typecheck
+          npm run build
+      - name: Smoke-build the generated tech commerce UI profile
+        working-directory: blueprints/react-vite
+        run: |
+          node ../../scripts/prepare-ui-profile-smoke.mjs tech-commerce-premium
+          npm run typecheck
+          npm run build
+      - name: Smoke-build the generated academic UI profile
+        working-directory: blueprints/react-vite
+        run: |
+          node ../../scripts/prepare-ui-profile-smoke.mjs academic-institutional-premium
           npm run typecheck
           npm run build

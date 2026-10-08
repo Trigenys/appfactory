@@ -9,6 +9,7 @@ export type MobilePreset = "android-compose";
 export type DesktopPlatform = "windows";
 export type DesktopPreset = "tauri-react";
 export type WebAppPreset = "react-vite";
+export type UiProfile = "editorial-lifestyle-premium" | "tech-commerce-premium" | "professional-service-premium" | "academic-institutional-premium";
 export type Industry =
   | "legal"
   | "technology"
@@ -85,6 +86,7 @@ export interface CreateProjectRequest {
   projectType?: ProjectType;
   preset?: ServicePreset | MobilePreset | DesktopPreset | WebAppPreset;
   platform?: MobilePlatform | DesktopPlatform;
+  uiProfile?: UiProfile;
   slug?: string;
   description?: string;
   private?: boolean;

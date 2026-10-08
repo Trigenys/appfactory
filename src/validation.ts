@@ -11,7 +11,8 @@ import type {
   ProjectLanguage,
   ProjectType,
   ServicePreset,
-  WebAppPreset
+  WebAppPreset,
+  UiProfile
 } from "./types";
 
 const RECIPES = new Set<DesignRecipe>(["corporate", "luxury", "saas"]);
@@ -25,6 +26,10 @@ const MOBILE_PRESETS = new Set<MobilePreset>(["android-compose"]);
 const DESKTOP_PLATFORMS = new Set<DesktopPlatform>(["windows"]);
 const DESKTOP_PRESETS = new Set<DesktopPreset>(["tauri-react"]);
 const WEBAPP_PRESETS = new Set<WebAppPreset>(["react-vite"]);
+const UI_PROFILES = new Set<UiProfile>([
+  "editorial-lifestyle-premium", "tech-commerce-premium",
+  "professional-service-premium", "academic-institutional-premium"
+]);
 const GOALS = new Set<ConversionGoal>(["leads", "bookings", "sales", "signup", "contact", "awareness"]);
 
 export function slugify(value: string): string {
@@ -105,6 +110,14 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     throw new Error("preset and platform are only valid for service, mobile, desktop or webapp projects.");
   }
 
+  const uiProfile = body.uiProfile;
+  if (uiProfile !== undefined) {
+    if (projectType !== "webapp") throw new Error("uiProfile is only valid for webapp projects.");
+    if (typeof uiProfile !== "string" || !UI_PROFILES.has(uiProfile as UiProfile)) {
+      throw new Error("uiProfile must be a supported AppFactory visual direction.");
+    }
+  }
+
   if (projectType === "profile" && slug !== ".github") {
     throw new Error("profile projects must use slug: .github.");
   }
@@ -153,6 +166,7 @@ export function validateCreateProject(input: unknown): CreateProjectRequest & { 
     engine: engine as GenerationEngine,
     recipe: recipe as DesignRecipe | undefined,
     animation: animation as AnimationLevel | undefined,
+    uiProfile: uiProfile as UiProfile | undefined,
     heroTitle: optionalTrimmedString(body, "heroTitle", 160),
     heroSubtitle: optionalTrimmedString(body, "heroSubtitle", 400),
     primaryCtaLabel: optionalTrimmedString(body, "primaryCtaLabel", 80),
