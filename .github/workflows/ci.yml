@@ -113,6 +113,8 @@ jobs:
         run: npm run test:hyperdrive-provisioning
       - name: Validate private database lease contract
         run: npm run test:database-lease
+      - name: Validate Neon-to-Cloudflare secrets provisioning
+        run: npm run test:neon-provisioning
       - name: Validate infrastructure environment isolation
         run: npm run test:infrastructure-environments
       - name: Validate Worker migration release gate
