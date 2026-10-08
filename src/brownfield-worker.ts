@@ -144,6 +144,7 @@ export interface BrownfieldWorkerResult {
   repository: string;
   worker: {
     name: string;
+    runtime: BrownfieldWorkerRuntime;
     tag: string;
     created: boolean;
     url: string;
@@ -1357,6 +1358,12 @@ export async function provisionBrownfieldWorker(
   );
 
   const buildVariables: Record<string, BuildEnvironmentVariable> = {};
+  if (request.runtime === "typescript-wrangler") {
+    buildVariables.NODE_VERSION = {
+      value: "24",
+      is_secret: false
+    };
+  }
   if (deployCommandRequiresBuildEnv) {
     buildVariables.APPFACTORY_DEPLOY_COMMAND = {
       value: releaseDeployCommand,
@@ -1443,6 +1450,7 @@ export async function provisionBrownfieldWorker(
     repository: repository.full_name,
     worker: {
       name: request.workerName,
+      runtime: request.runtime,
       tag: script.tag,
       created,
       url: workerUrl
