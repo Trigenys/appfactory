@@ -1,4 +1,5 @@
-import { AuthenticationError, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { AuthenticationError, authenticateDatabaseLease, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { issueDatabaseLease, DatabaseLeaseError } from "./database-lease";
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
@@ -1125,6 +1126,32 @@ export default {
       infrastructureClaims
     ) {
       return provisionExistingWorker(request, env, infrastructureClaims);
+    }
+
+    if (request.method === "POST" && url.pathname === "/infrastructure/database-lease") {
+      try {
+        const claims = await authenticateDatabaseLease(request, env);
+        const body = await request.json() as unknown;
+        const lease = issueDatabaseLease(env, claims, body);
+        return new Response(JSON.stringify(lease), {
+          status: 200,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store, private",
+            "pragma": "no-cache",
+            "x-content-type-options": "nosniff"
+          }
+        });
+      } catch (error) {
+        if (error instanceof AuthenticationError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        if (error instanceof DatabaseLeaseError) {
+          return json({ error: error.code, message: error.message }, error.status);
+        }
+        // Error payloads and connection URLs are never logged.
+        return json({ error: "DATABASE_LEASE_FAILED", message: "Unable to issue a database lease." }, 500);
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/projects") {
