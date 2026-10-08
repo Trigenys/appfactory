@@ -203,3 +203,15 @@ jobs:
           npm install --ignore-scripts
           npm run typecheck
           npm run build
+      - name: Smoke-build the generated tech commerce UI profile
+        working-directory: blueprints/react-vite
+        run: |
+          node ../../scripts/prepare-ui-profile-smoke.mjs tech-commerce-premium
+          npm run typecheck
+          npm run build
+      - name: Smoke-build the generated academic UI profile
+        working-directory: blueprints/react-vite
+        run: |
+          node ../../scripts/prepare-ui-profile-smoke.mjs academic-institutional-premium
+          npm run typecheck
+          npm run build
