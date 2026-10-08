@@ -9,6 +9,7 @@ const STAGING_HYPERDRIVE_MARKER_PATH = ".appfactory/hyperdrive.staging.json";
 const SCHEMA_VERSION = 1;
 const DEFAULT_BINDING = "HYPERDRIVE";
 const DEDICATED_PROFILE_SECRET_PREFIX = "HYPERDRIVE_DATABASE_PROFILE__";
+const DEDICATED_URL_SECRET_PREFIX = "HYPERDRIVE_DATABASE_URL__";
 
 export type InfrastructureEnvironment = "production" | "staging";
 
@@ -497,6 +498,51 @@ function parseDedicatedProfile(
   return value as HyperdriveProfile;
 }
 
+function dedicatedUrlSecretName(profileName: string): string {
+  const normalized = profileName.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return `${DEDICATED_URL_SECRET_PREFIX}${normalized}`;
+}
+
+function parseDedicatedConnectionUrl(
+  env: Env,
+  profileName: string
+): HyperdriveProfile | undefined {
+  const secretName = dedicatedUrlSecretName(profileName);
+  const raw = (env as unknown as Record<string, string | undefined>)[secretName]?.trim();
+  if (!raw) return undefined;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_DATABASE_PROFILE_INVALID",
+      `Dedicated database URL for ${profileName} is invalid.`
+    );
+  }
+
+  const scheme = url.protocol.replace(":", "");
+  const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  const user = decodeURIComponent(url.username);
+  const password = decodeURIComponent(url.password);
+  const port = url.port
+    ? Number(url.port)
+    : scheme === "mysql"
+      ? 3306
+      : 5432;
+
+  return validateProfile(profileName, {
+    origin: {
+      scheme: scheme as DatabaseOrigin["scheme"],
+      host: url.hostname,
+      port,
+      database,
+      user,
+      password
+    }
+  });
+}
+
 function validateProfile(name: string, profile: HyperdriveProfile | undefined): HyperdriveProfile {
   const origin = profile?.origin;
   if (
@@ -537,6 +583,9 @@ function encodeDatabaseComponent(value: string): string {
 function managedProfile(env: Env, profileName: string): HyperdriveProfile {
   const dedicated = parseDedicatedProfile(env, profileName);
   if (dedicated) return validateProfile(profileName, dedicated);
+
+  const dedicatedUrl = parseDedicatedConnectionUrl(env, profileName);
+  if (dedicatedUrl) return dedicatedUrl;
 
   const profiles = parseProfiles(env);
   if (!(profileName in profiles)) {
