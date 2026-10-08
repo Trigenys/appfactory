@@ -72,3 +72,9 @@ test("readiness polling stays within Cloudflare Worker subrequest budget", () =>
   assert.match(readiness, /const DEFAULT_READINESS_ATTEMPTS = 6/);
   assert.match(readiness, /options\.attempts \?\? DEFAULT_READINESS_ATTEMPTS/);
 });
+
+
+test("readiness polling allows deployment propagation without extra subrequests", () => {
+  assert.match(readiness, /const DEFAULT_READINESS_ATTEMPTS = 6/);
+  assert.match(readiness, /options\.intervalMs \?\? 5000/);
+});
