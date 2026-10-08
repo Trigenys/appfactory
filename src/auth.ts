@@ -322,3 +322,39 @@ export async function authenticateDatabaseLease(
   }
   return claims;
 }
+
+/**
+ * Stateful Neon provisioning may run only on explicitly dispatched, main
+ * branch workflows. Both supported workflow identities are pinned to their
+ * canonical workflow files; the Neon target itself is separately allowlisted.
+ */
+export async function authenticateNeonProvisioning(
+  request: Request,
+  env: Env
+): Promise<GitHubOidcClaims> {
+  const { claims, expectedRef } = await verifyOidcToken(request, env);
+  const repository = claims.repository || "";
+  const owner = env.GITHUB_OWNER || "Trigenys";
+  if (!repository.startsWith(owner + "/") || claims.event_name !== "workflow_dispatch") {
+    throw new AuthenticationError(
+      403,
+      "NEON_PROVISIONER_FORBIDDEN",
+      "Neon provisioning requires an explicitly dispatched Trigenys workflow."
+    );
+  }
+  const canonicalInfra =
+    repository + "/.github/workflows/appfactory-infrastructure.yml@" + expectedRef;
+  const seoCollector =
+    "Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@" + expectedRef;
+  if (
+    claims.workflow_ref !== canonicalInfra &&
+    !(repository === "Trigenys/trigenys-seo-monitor" && claims.workflow_ref === seoCollector)
+  ) {
+    throw new AuthenticationError(
+      403,
+      "NEON_PROVISIONER_WORKFLOW_FORBIDDEN",
+      "Neon provisioning is restricted to canonical workflows on main."
+    );
+  }
+  return claims;
+}
