@@ -226,3 +226,30 @@ test("endpoint uses exact signed GitHub OIDC caller and never returns connection
   assert.match(workerSource,/export async function listSecretNames\(/);
   assert.doesNotMatch(source,/console\.(?:log|error|warn)/);
 });
+
+
+test("Editorial OS staging is a sealed AppFactory control-plane Neon target", () => {
+  const target = approvedNeonTarget({}, "Trigenys/trigenys-editorial-os");
+  assert.deepEqual(target, {
+    projectId: "little-frog-93793324",
+    branchId: "br-twilight-star-b2orr8hw",
+    databaseName: "editorial_os_staging",
+    roleName: "editorial_os_staging",
+    workerName: "appfactory-api",
+    secretName: "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING",
+    createMissing: false
+  });
+  assert.throws(() => approvedNeonTarget({
+    APPFACTORY_NEON_TARGETS: JSON.stringify({
+      "Trigenys/trigenys-editorial-os": {
+        projectId: "little-frog-93793324",
+        branchId: "br-twilight-star-b2orr8hw",
+        databaseName: "evil",
+        roleName: "evil",
+        workerName: "trigenys-editorial-os-api",
+        secretName: "TRIGENYS_EDITORIAL_OS_DATABASE_URL",
+        createMissing: false
+      }
+    })
+  }, "Trigenys/trigenys-editorial-os"));
+});

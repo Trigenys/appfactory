@@ -3,6 +3,7 @@ import type { GitHubOidcClaims } from "./auth";
 
 const NEON_BASE = "https://console.neon.tech/api/v2";
 const SEO_REPOSITORY = "Trigenys/trigenys-seo-monitor";
+const EDITORIAL_OS_REPOSITORY = "Trigenys/trigenys-editorial-os";
 
 export interface NeonTarget {
   projectId: string;
@@ -21,6 +22,16 @@ const SEO_TARGET: NeonTarget = {
   roleName: "seo_monitor_owner",
   workerName: "appfactory-api",
   secretName: "APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL",
+  createMissing: false
+};
+
+const EDITORIAL_OS_STAGING_TARGET: NeonTarget = {
+  projectId: "little-frog-93793324",
+  branchId: "br-twilight-star-b2orr8hw",
+  databaseName: "editorial_os_staging",
+  roleName: "editorial_os_staging",
+  workerName: "appfactory-api",
+  secretName: "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING",
   createMissing: false
 };
 
@@ -56,7 +67,10 @@ const SECRET_IDENTIFIER = /^[A-Z][A-Z0-9_]{5,100}$/;
 const WORKER_IDENTIFIER = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 function parseTargets(env: Env): Record<string, NeonTarget> {
-  const targets: Record<string, NeonTarget> = { [SEO_REPOSITORY]: SEO_TARGET };
+  const targets: Record<string, NeonTarget> = {
+    [SEO_REPOSITORY]: SEO_TARGET,
+    [EDITORIAL_OS_REPOSITORY]: EDITORIAL_OS_STAGING_TARGET
+  };
   if (!env.APPFACTORY_NEON_TARGETS?.trim()) return targets;
   let parsed: unknown;
   try {
@@ -70,6 +84,7 @@ function parseTargets(env: Env): Record<string, NeonTarget> {
   for (const [repository, raw] of Object.entries(parsed as Record<string, unknown>)) {
     if (
       repository === SEO_REPOSITORY ||
+      repository === EDITORIAL_OS_REPOSITORY ||
       !/^Trigenys\/[a-zA-Z0-9_.-]{1,90}$/.test(repository) ||
       !raw ||
       typeof raw !== "object" ||
@@ -94,8 +109,8 @@ function parseTargets(env: Env): Record<string, NeonTarget> {
       throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "AppFactory Neon target configuration is invalid.");
     }
     const repoSlug = repository.split("/")[1];
-    // A repo may only provision its own named Worker/secret; AppFactory's
-    // global Worker is reserved for the hard-coded SEO Monitor allowlist.
+    // A configurable repo may only provision its own named Worker/secret.
+    // AppFactory's global Worker is reserved for hard-coded control-plane targets.
     const secretPrefix = repoSlug.toUpperCase().replace(/[^A-Z0-9]/g, "_") + "_";
     if (
       value.workerName !== repoSlug + "-api" ||
