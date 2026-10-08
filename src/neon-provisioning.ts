@@ -244,6 +244,38 @@ async function neonRequest<T>(
   }
 }
 
+const DATABASE_CREATE_MAX_ATTEMPTS = 4;
+const DATABASE_CREATE_RETRY_BASE_MS = 250;
+
+async function createDatabaseWithRetry(
+  env: Env,
+  deps: NeonDependencies,
+  path: string,
+  target: NeonTarget
+): Promise<void> {
+  for (let attempt = 1; attempt <= DATABASE_CREATE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await neonRequest(
+        env,
+        deps.fetch,
+        path,
+        "POST",
+        { database: { name: target.databaseName, owner_name: target.roleName } }
+      );
+      return;
+    } catch (error) {
+      const retryable =
+        error instanceof NeonProvisioningError &&
+        error.code === "NEON_STATE_CONFLICT" &&
+        attempt < DATABASE_CREATE_MAX_ATTEMPTS;
+      if (!retryable) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, DATABASE_CREATE_RETRY_BASE_MS * attempt)
+      );
+    }
+  }
+}
+
 function validateNeonConnection(uri: string, target: NeonTarget): string {
   let u: URL;
   try { u = new URL(uri); }
@@ -442,9 +474,11 @@ export async function provisionApprovedNeon(
     if (!target.createMissing) {
       throw new NeonProvisioningError(409, "NEON_DATABASE_MISSING", "Approved PostgreSQL database does not exist.");
     }
-    await neonRequest(
-      env, deps.fetch, base + "/databases", "POST",
-      { database: {name:target.databaseName, owner_name:target.roleName} }
+    await createDatabaseWithRetry(
+      env,
+      deps,
+      base + "/databases",
+      target
     );
     createdDatabase = true;
   }
