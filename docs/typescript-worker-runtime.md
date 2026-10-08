@@ -39,6 +39,7 @@ AppFactory owns the deployment recipe:
 root:   /backend
 build:  npm ci --ignore-scripts && npm run check
 deploy: ./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars
+build environment: NODE_VERSION=24
 ```
 
 The backend therefore owns:
