@@ -38,30 +38,28 @@ This new secret is independent of `HYPERDRIVE_DATABASE_PROFILES` used by
 Product Identity. Updating the SEO Monitor secret therefore cannot overwrite
 Product Identity's or Editorial OS's existing database connection profiles.
 
-## One-time secret setup in Cloudflare
+## Automated Neon → Cloudflare bootstrap
 
-The `seo_monitor` database and role already exist in the Neon Free project
-`little-frog-93793324`, branch `br-twilight-star-b2orr8hw`.
+AppFactory can now populate its own private database secret using the
+existing Worker secret helpers `listSecretNames` / `putSecret`. A
+one-time `NEON_API_KEY` is required as a **private Worker Secret** in
+`appfactory-api`. The ChatGPT Neon connector is not automatically
+delegated to the Cloudflare account.
 
-In Cloudflare, open Workers & Pages → `appfactory-api` → Settings →
-**Variables and Secrets** and add a **new Secret**:
+A manually dispatched SEO Monitor `full` workflow calls the protected
+`POST /infrastructure/neon` endpoint, which verifies the existing Neon
+role/database and stores `APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL`
+**only if missing**. Product Identity's Hyperdrive profile is untouched.
 
-- Name: `APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL`
-- Value: the Neon connection string from the `seo_monitor` database,
-  `seo_monitor_owner` role, `production` branch.
-- Do not modify `HYPERDRIVE_DATABASE_PROFILES` or commit the value to source.
-- Ensure the Worker deployment is active before running SEO Monitor `full`.
-
-The Neon connection includes a password; do not send it in a chat message or
-screenshot. After initial setup, rotation is performed by replacing only this
-Cloudflare secret. If you have no Cloudflare admin/browser access, provisioning
-stops cleanly with `DATABASE_LEASE_NOT_CONFIGURED`.
+No manual PostgreSQL URL copy into Cloudflare or GitHub is necessary.
+See [managed Neon provisioning](neon-managed-provisioning.md) for security,
+allowlisting and future project patterns.
 
 ## Operational smoke test
 
 1. In SEO Monitor GitHub Actions, dispatch `verify`. It should still succeed
    even if the Neon lease secret is missing (Google-only verification).
-2. Dispatch `full` only after the AppFactory secret exists.
+2. Add the `NEON_API_KEY` Worker secret once, then dispatch `full`; the target DB connection secret is populated automatically.
 3. The full job requests its OIDC-scoped connection at runtime, writes
    Search Console and sitemap observations into `seo_monitor`, then exits.
 4. Query the dedicated Neon database for the `seo_monitor_runs` table and a
@@ -74,8 +72,8 @@ stops cleanly with `DATABASE_LEASE_NOT_CONFIGURED`.
 The database URL is a credential in transit in the **trusted** GitHub runner.
 AppFactory does not magically turn PostgreSQL passwords into passwordless
 tokens, and the Workload Identity Federation set up for Google only authorizes
-Google APIs. This design avoids long-lived GitHub copies but still requires one
-Cloudflare Worker secret. Restrict repository write/Actions permissions and
+Google APIs. This design avoids long-lived GitHub copies but requires the Neon API key
+as one initial private Cloudflare Worker secret. Restrict repository write/Actions permissions and
 rotate the Neon role password if authorization boundaries are compromised.
 
 The current lease is scoped to SEO Monitor. Generalizing to other repositories

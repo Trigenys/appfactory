@@ -1053,7 +1053,7 @@ async function ensureBuild(
   }
 }
 
-async function listSecretNames(env: Env, workerName: string): Promise<Set<string>> {
+export async function listSecretNames(env: Env, workerName: string): Promise<Set<string>> {
   assertCloudflareConfig(env);
   try {
     const secrets = await cloudflareRequest<Array<{ name: string }>>(
@@ -1066,7 +1066,7 @@ async function listSecretNames(env: Env, workerName: string): Promise<Set<string
   }
 }
 
-async function putSecret(
+export async function putSecret(
   env: Env,
   workerName: string,
   name: string,
