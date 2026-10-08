@@ -25,6 +25,8 @@ test("TypeScript runtime uses one reviewed deterministic recipe", () => {
   );
   assert.match(source, /rootDirectory = input\.rootDirectory \|\| "\/backend"/);
   assert.match(source, /BUILD_COMMAND_FORBIDDEN/);
+  assert.match(source, /buildVariables\.NODE_VERSION = \{/);
+  assert.match(source, /value: "24"/);
 });
 
 test("runtime identity is ownership evidence without breaking legacy Python markers", () => {
