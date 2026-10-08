@@ -141,3 +141,28 @@ L'absence de `NEON_API_KEY` renvoie le code
 Le test `npm run test:neon-provisioning` simule Neon et Cloudflare,
 incluant tentatives inter-dépôts, écrasement, erreurs et mauvais propriétaires.
 Aucun test de CI ne dépend d'une véritable clé Neon.
+
+
+## Hyperdrive : secret dédié par profil
+
+Pour un projet existant qui possède déjà sa base Neon, AppFactory peut résoudre un profil
+Hyperdrive depuis un secret Cloudflare dédié sans réécrire le secret historique
+`HYPERDRIVE_DATABASE_PROFILES`.
+
+Convention :
+
+```text
+HYPERDRIVE_DATABASE_PROFILE__<PROFILE_NORMALISÉ>
+```
+
+Exemple pour `trigenys-editorial-os-staging` :
+
+```text
+HYPERDRIVE_DATABASE_PROFILE__TRIGENYS_EDITORIAL_OS_STAGING
+```
+
+La valeur est un objet JSON de profil Hyperdrive contenant `origin.scheme`, `host`,
+`port`, `database`, `user` et `password`. Ce secret reste uniquement dans le Worker
+`appfactory-api`. Le secret dédié est prioritaire pour ce profil ; les autres projets
+continuent d'utiliser la map historique. Cela évite d'écraser des credentials existants
+lorsqu'un nouveau projet brownfield est raccordé.
