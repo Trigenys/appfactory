@@ -1,0 +1,8 @@
+{
+  "name": "Trigenys SEO Monitor",
+  "slug": "trigenys-seo-monitor",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "First-party multi-property SEO monitoring: Search Console analytics, crawl and sitemap checks, competitor tracking and weekly reports."
+}
