@@ -111,6 +111,8 @@ jobs:
         run: npm run test:ci-impact
       - name: Validate Hyperdrive provisioning contract
         run: npm run test:hyperdrive-provisioning
+      - name: Validate private database lease contract
+        run: npm run test:database-lease
       - name: Validate infrastructure environment isolation
         run: npm run test:infrastructure-environments
       - name: Validate Worker migration release gate
