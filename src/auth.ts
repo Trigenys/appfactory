@@ -313,11 +313,11 @@ export async function authenticateDatabaseLease(
       "Database access is restricted to the SEO Monitor workflow on main."
     );
   }
-  if (claims.event_name !== "schedule" && claims.event_name !== "workflow_dispatch") {
+  if (claims.event_name !== "schedule" && claims.event_name !== "workflow_dispatch" && claims.event_name !== "push") {
     throw new AuthenticationError(
       403,
       "DATABASE_LEASE_EVENT_FORBIDDEN",
-      "Database leases are available only to scheduled or manually dispatched monitoring jobs."
+      "Database leases are available only to trusted main monitoring jobs (scheduled, dispatched, or one-time bootstrap push)."
     );
   }
   return claims;
@@ -335,11 +335,18 @@ export async function authenticateNeonProvisioning(
   const { claims, expectedRef } = await verifyOidcToken(request, env);
   const repository = claims.repository || "";
   const owner = env.GITHUB_OWNER || "Trigenys";
-  if (!repository.startsWith(owner + "/") || claims.event_name !== "workflow_dispatch") {
+  // Temporary one-shot bootstrap via a main-branch push in SEO Monitor.
+  // This does not grant access to any other repo, workflow, branch or target.
+  const seoOneTimePush =
+    repository === "Trigenys/trigenys-seo-monitor" &&
+    claims.event_name === "push" &&
+    claims.workflow_ref ===
+      "Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@" + expectedRef;
+  if (!repository.startsWith(owner + "/") || (claims.event_name !== "workflow_dispatch" && !seoOneTimePush)) {
     throw new AuthenticationError(
       403,
       "NEON_PROVISIONER_FORBIDDEN",
-      "Neon provisioning requires an explicitly dispatched Trigenys workflow."
+      "Neon provisioning requires a dispatched Trigenys workflow or the dedicated one-time SEO Monitor main push."
     );
   }
   const canonicalInfra =
