@@ -8,6 +8,7 @@ const HYPERDRIVE_MARKER_PATH = ".appfactory/hyperdrive.json";
 const STAGING_HYPERDRIVE_MARKER_PATH = ".appfactory/hyperdrive.staging.json";
 const SCHEMA_VERSION = 1;
 const DEFAULT_BINDING = "HYPERDRIVE";
+const DEDICATED_PROFILE_SECRET_PREFIX = "HYPERDRIVE_DATABASE_PROFILE__";
 
 export type InfrastructureEnvironment = "production" | "staging";
 
@@ -463,6 +464,39 @@ function parseProfiles(env: Env): Record<string, HyperdriveProfile> {
   return value as Record<string, HyperdriveProfile>;
 }
 
+function dedicatedProfileSecretName(profileName: string): string {
+  const normalized = profileName.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return `${DEDICATED_PROFILE_SECRET_PREFIX}${normalized}`;
+}
+
+function parseDedicatedProfile(
+  env: Env,
+  profileName: string
+): HyperdriveProfile | undefined {
+  const secretName = dedicatedProfileSecretName(profileName);
+  const raw = (env as unknown as Record<string, string | undefined>)[secretName]?.trim();
+  if (!raw) return undefined;
+
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_DATABASE_PROFILE_INVALID",
+      `Dedicated database profile ${profileName} contains invalid JSON.`
+    );
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_DATABASE_PROFILE_INVALID",
+      `Dedicated database profile ${profileName} must be a JSON object.`
+    );
+  }
+
+  return value as HyperdriveProfile;
+}
+
 function validateProfile(name: string, profile: HyperdriveProfile | undefined): HyperdriveProfile {
   const origin = profile?.origin;
   if (
@@ -500,9 +534,23 @@ function encodeDatabaseComponent(value: string): string {
   return encodeURIComponent(value);
 }
 
-export function managedDatabaseUrl(env: Env, profileName: string): string {
+function managedProfile(env: Env, profileName: string): HyperdriveProfile {
+  const dedicated = parseDedicatedProfile(env, profileName);
+  if (dedicated) return validateProfile(profileName, dedicated);
+
   const profiles = parseProfiles(env);
-  const profile = validateProfile(profileName, profiles[profileName]);
+  if (!(profileName in profiles)) {
+    const availableProfiles = Object.keys(profiles).sort();
+    throw new HyperdriveProvisioningError(
+      "HYPERDRIVE_DATABASE_PROFILE_NOT_FOUND",
+      `Database profile ${profileName} is not configured. Available managed profiles: ${availableProfiles.length > 0 ? availableProfiles.join(", ") : "(none)"}.`
+    );
+  }
+  return validateProfile(profileName, profiles[profileName]);
+}
+
+export function managedDatabaseUrl(env: Env, profileName: string): string {
+  const profile = managedProfile(env, profileName);
   const origin = profile.origin;
   const scheme = origin.scheme === "mysql" ? "mysql+pymysql" : "postgresql+psycopg";
   const port = origin.port ?? (origin.scheme === "mysql" ? 3306 : 5432);
@@ -887,15 +935,7 @@ export async function provisionHyperdrive(
     request.environment
   );
 
-  const profiles = parseProfiles(env);
-  if (!(request.profile in profiles)) {
-    const availableProfiles = Object.keys(profiles).sort();
-    throw new HyperdriveProvisioningError(
-      "HYPERDRIVE_DATABASE_PROFILE_NOT_FOUND",
-      `Database profile ${request.profile} is not configured. Available managed profiles: ${availableProfiles.length > 0 ? availableProfiles.join(", ") : "(none)"}.`
-    );
-  }
-  const profile = validateProfile(request.profile, profiles[request.profile]);
+  const profile = managedProfile(env, request.profile);
   const markerFile = await readHyperdriveMarker(
     githubToken,
     repository,
