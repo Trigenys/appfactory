@@ -21,7 +21,8 @@
     "test:worker-readiness-gate": "node --test test/worker-readiness-gate.test.mjs",
     "test:brownfield-pages": "node --test test/brownfield-pages.test.mjs",
     "test:infrastructure-environments": "node --test test/infrastructure-environments.test.mjs",
-    "test:database-lease": "node --test test/database-lease.test.mjs"
+    "test:database-lease": "node --test test/database-lease.test.mjs",
+    "test:neon-provisioning": "node --test test/neon-provisioning.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
