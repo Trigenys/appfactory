@@ -5,6 +5,12 @@ const NEON_BASE = "https://console.neon.tech/api/v2";
 const SEO_REPOSITORY = "Trigenys/trigenys-seo-monitor";
 const EDITORIAL_OS_REPOSITORY = "Trigenys/trigenys-editorial-os";
 
+export interface NeonAuthTarget {
+  provider: "better_auth";
+  applicationName: string;
+  baseUrlSecretName: string;
+}
+
 export interface NeonTarget {
   projectId: string;
   branchId: string;
@@ -13,6 +19,7 @@ export interface NeonTarget {
   workerName: string;
   secretName: string;
   createMissing: boolean;
+  auth?: NeonAuthTarget;
 }
 
 const SEO_TARGET: NeonTarget = {
@@ -49,6 +56,11 @@ export type ProvisioningResult = {
   secretName: string;
   createdDatabase: boolean;
   createdRole: boolean;
+  auth: {
+    enabled: boolean;
+    created: boolean;
+    baseUrlSecretName: string | null;
+  };
 };
 
 export class NeonProvisioningError extends Error {
@@ -93,11 +105,11 @@ function parseTargets(env: Env): Record<string, NeonTarget> {
       throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "AppFactory Neon target configuration is invalid.");
     }
     const value = raw as Record<string, unknown>;
-    const keys = Object.keys(value).sort();
+    const allowedKeys = new Set([
+      "branchId", "createMissing", "databaseName", "projectId", "roleName", "secretName", "workerName", "auth"
+    ]);
     if (
-      keys.join(",") !== [
-        "branchId", "createMissing", "databaseName", "projectId", "roleName", "secretName", "workerName"
-      ].sort().join(",") ||
+      Object.keys(value).some(key => !allowedKeys.has(key)) ||
       typeof value.projectId !== "string" || !PROJECT_IDENTIFIER.test(value.projectId) ||
       typeof value.branchId !== "string" || !PROJECT_IDENTIFIER.test(value.branchId) ||
       typeof value.databaseName !== "string" || !IDENTIFIER.test(value.databaseName) ||
@@ -108,17 +120,53 @@ function parseTargets(env: Env): Record<string, NeonTarget> {
     ) {
       throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "AppFactory Neon target configuration is invalid.");
     }
+
+    let auth: NeonAuthTarget | undefined;
+    if (value.auth !== undefined) {
+      if (!value.auth || typeof value.auth !== "object" || Array.isArray(value.auth)) {
+        throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "AppFactory Neon auth target configuration is invalid.");
+      }
+      const rawAuth = value.auth as Record<string, unknown>;
+      const authKeys = Object.keys(rawAuth).sort();
+      if (
+        authKeys.join(",") !== ["applicationName", "baseUrlSecretName", "provider"].sort().join(",") ||
+        rawAuth.provider !== "better_auth" ||
+        typeof rawAuth.applicationName !== "string" ||
+        rawAuth.applicationName.trim().length < 1 ||
+        rawAuth.applicationName.length > 128 ||
+        typeof rawAuth.baseUrlSecretName !== "string" ||
+        !SECRET_IDENTIFIER.test(rawAuth.baseUrlSecretName)
+      ) {
+        throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "AppFactory Neon auth target configuration is invalid.");
+      }
+      auth = {
+        provider: "better_auth",
+        applicationName: rawAuth.applicationName.trim(),
+        baseUrlSecretName: rawAuth.baseUrlSecretName
+      };
+    }
+
     const repoSlug = repository.split("/")[1];
-    // A configurable repo may only provision its own named Worker/secret.
+    // A configurable repo may only provision its own named Worker/secrets.
     // AppFactory's global Worker is reserved for hard-coded control-plane targets.
     const secretPrefix = repoSlug.toUpperCase().replace(/[^A-Z0-9]/g, "_") + "_";
     if (
       value.workerName !== repoSlug + "-api" ||
-      !(value.secretName as string).startsWith(secretPrefix)
+      !(value.secretName as string).startsWith(secretPrefix) ||
+      (auth && !auth.baseUrlSecretName.startsWith(secretPrefix))
     ) {
       throw new NeonProvisioningError(503, "NEON_TARGET_SCOPE_INVALID", "Neon target Worker/secret scope is invalid.");
     }
-    targets[repository] = value as unknown as NeonTarget;
+    targets[repository] = {
+      projectId: value.projectId,
+      branchId: value.branchId,
+      databaseName: value.databaseName,
+      roleName: value.roleName,
+      workerName: value.workerName,
+      secretName: value.secretName,
+      createMissing: value.createMissing,
+      ...(auth ? { auth } : {})
+    } as NeonTarget;
   }
   if (Object.keys(targets).length > 40) {
     throw new NeonProvisioningError(503, "NEON_TARGETS_INVALID", "Too many Neon targets configured.");
@@ -153,7 +201,7 @@ async function neonRequest<T>(
   env: Env,
   fetcher: NeonDependencies["fetch"],
   path: string,
-  method: "GET" | "POST" = "GET",
+  method: "GET" | "POST" | "PATCH" = "GET",
   body?: unknown
 ): Promise<T> {
   if (!env.NEON_API_KEY) {
@@ -219,6 +267,103 @@ function validateNeonConnection(uri: string, target: NeonTarget): string {
   return u.toString();
 }
 
+type NeonAuthResponse = {
+  auth_provider?: string;
+  db_name?: string;
+  base_url?: string;
+  jwks_url?: string;
+};
+
+function validateNeonAuthBaseUrl(value: string): string {
+  let url: URL;
+  try { url = new URL(value); }
+  catch {
+    throw new NeonProvisioningError(502, "NEON_AUTH_URL_INVALID", "Neon Auth returned an invalid base URL.");
+  }
+  if (
+    url.protocol !== "https:" ||
+    Boolean(url.username) ||
+    Boolean(url.password) ||
+    Boolean(url.hash) ||
+    !(url.hostname.endsWith(".neon.tech") || url.hostname.endsWith(".neon.build"))
+  ) {
+    throw new NeonProvisioningError(502, "NEON_AUTH_URL_INVALID", "Neon Auth returned an unexpected base URL.");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+async function ensureManagedAuth(
+  env: Env,
+  deps: NeonDependencies,
+  target: NeonTarget,
+  base: string
+): Promise<{ created: boolean; baseUrl: string }> {
+  if (!target.auth) {
+    throw new NeonProvisioningError(503, "NEON_AUTH_TARGET_INVALID", "Managed Auth target is missing.");
+  }
+
+  let response: Response;
+  try {
+    response = await deps.fetch(NEON_BASE + base + "/auth", {
+      method: "GET",
+      headers: {
+        Authorization: "Bearer " + env.NEON_API_KEY,
+        Accept: "application/json"
+      }
+    });
+  } catch {
+    throw new NeonProvisioningError(502, "NEON_AUTH_REQUEST_FAILED", "Neon Auth API request failed.");
+  }
+
+  let created = false;
+  let auth: NeonAuthResponse;
+  if (response.status === 404) {
+    auth = await neonRequest<NeonAuthResponse>(
+      env,
+      deps.fetch,
+      base + "/auth",
+      "POST",
+      {
+        auth_provider: target.auth.provider,
+        database_name: target.databaseName
+      }
+    );
+    created = true;
+  } else {
+    if (!response.ok) {
+      const code =
+        response.status === 401 || response.status === 403
+          ? "NEON_API_PERMISSION_DENIED"
+          : "NEON_AUTH_API_UNAVAILABLE";
+      throw new NeonProvisioningError(502, code, "Neon Auth API returned an error; no credentials were logged.");
+    }
+    try {
+      auth = await response.json() as NeonAuthResponse;
+    } catch {
+      throw new NeonProvisioningError(502, "NEON_RESPONSE_INVALID", "Neon Auth API returned an invalid response.");
+    }
+  }
+
+  if (
+    auth.auth_provider !== target.auth.provider ||
+    (auth.db_name !== undefined && auth.db_name !== target.databaseName) ||
+    typeof auth.base_url !== "string"
+  ) {
+    throw new NeonProvisioningError(409, "NEON_AUTH_TARGET_MISMATCH", "Existing Neon Auth configuration does not match the approved target.");
+  }
+
+  const baseUrl = validateNeonAuthBaseUrl(auth.base_url);
+  await neonRequest(
+    env,
+    deps.fetch,
+    base + "/auth/config",
+    "PATCH",
+    { name: target.auth.applicationName }
+  );
+
+  return { created, baseUrl };
+}
+
 /**
  * Idempotently prepare only an operator-approved Neon target and store its
  * PostgreSQL connection as a Cloudflare Worker secret. Never return URLs,
@@ -239,12 +384,20 @@ export async function provisionApprovedNeon(
   } catch {
     throw new NeonProvisioningError(502, "CLOUDFLARE_SECRET_LOOKUP_FAILED", "Unable to check the approved Worker secret.");
   }
-  if (secretNames.has(target.secretName)) {
+  const databaseSecretConfigured = secretNames.has(target.secretName);
+  const authSecretConfigured =
+    !target.auth || secretNames.has(target.auth.baseUrlSecretName);
+  if (databaseSecretConfigured && authSecretConfigured) {
     return {
       status: "ALREADY_CONFIGURED",
       repository, database: target.databaseName,
       worker: target.workerName, secretName: target.secretName,
-      createdDatabase: false, createdRole: false
+      createdDatabase: false, createdRole: false,
+      auth: {
+        enabled: Boolean(target.auth),
+        created: false,
+        baseUrlSecretName: target.auth?.baseUrlSecretName || null
+      }
     };
   }
 
@@ -310,14 +463,38 @@ export async function provisionApprovedNeon(
   }
   const connection = validateNeonConnection(response.uri, target);
   try {
-    await deps.putSecret(env, target.workerName, target.secretName, connection);
+    if (!databaseSecretConfigured) {
+      await deps.putSecret(env, target.workerName, target.secretName, connection);
+    }
   } catch {
     throw new NeonProvisioningError(502, "CLOUDFLARE_SECRET_WRITE_FAILED", "Unable to save the approved Worker secret.");
   }
+
+  let authCreated = false;
+  if (target.auth && !authSecretConfigured) {
+    const managedAuth = await ensureManagedAuth(env, deps, target, base);
+    authCreated = managedAuth.created;
+    try {
+      await deps.putSecret(
+        env,
+        target.workerName,
+        target.auth.baseUrlSecretName,
+        managedAuth.baseUrl
+      );
+    } catch {
+      throw new NeonProvisioningError(502, "CLOUDFLARE_SECRET_WRITE_FAILED", "Unable to save the approved Neon Auth Worker variable.");
+    }
+  }
+
   return {
     status: "PROVISIONED",
     repository, database: target.databaseName,
     worker: target.workerName, secretName: target.secretName,
-    createdDatabase, createdRole
+    createdDatabase, createdRole,
+    auth: {
+      enabled: Boolean(target.auth),
+      created: authCreated,
+      baseUrlSecretName: target.auth?.baseUrlSecretName || null
+    }
   };
 }

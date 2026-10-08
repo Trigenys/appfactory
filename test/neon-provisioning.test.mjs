@@ -253,3 +253,91 @@ test("Editorial OS staging is a sealed AppFactory control-plane Neon target", ()
     })
   }, "Trigenys/trigenys-editorial-os"));
 });
+
+
+test("approved repo can provision Managed Better Auth without exposing its base URL", async () => {
+  const authRepo="Trigenys/commerce-auth-test";
+  const approved={
+    projectId:"little-frog-93793324",
+    branchId:"br-commerce-auth-test",
+    databaseName:"commerce_auth_test",
+    roleName:"commerce_auth_test_owner",
+    workerName:"commerce-auth-test-api",
+    secretName:"COMMERCE_AUTH_TEST_DATABASE_URL",
+    createMissing:true,
+    auth:{
+      provider:"better_auth",
+      applicationName:"Commerce Auth Test",
+      baseUrlSecretName:"COMMERCE_AUTH_TEST_AUTH_BASE_URL"
+    }
+  };
+  const config={...env,APPFACTORY_NEON_TARGETS:JSON.stringify({[authRepo]:approved})};
+  const calls=[];
+  const writes=[];
+  const branchBase="https://console.neon.tech/api/v2/projects/little-frog-93793324/branches/br-commerce-auth-test";
+
+  const result=await provisionApprovedNeon(
+    config,
+    {repository:authRepo},
+    {repository:authRepo},
+    {
+      listSecretNames:async()=>new Set(),
+      putSecret:async(_env,workerName,name,value)=>writes.push({workerName,name,value}),
+      fetch:async(url,init)=>{
+        calls.push({url,method:init?.method||"GET",body:init?.body});
+        if(url===branchBase+"/roles"&&init?.method==="GET")return Response.json({roles:[]});
+        if(url===branchBase+"/databases"&&init?.method==="GET")return Response.json({databases:[]});
+        if(url===branchBase+"/roles"&&init?.method==="POST")return Response.json({role:{name:approved.roleName}},{status:201});
+        if(url===branchBase+"/databases"&&init?.method==="POST")return Response.json({database:{name:approved.databaseName,owner_name:approved.roleName}},{status:201});
+        if(url.includes("/connection_uri?"))return Response.json({uri:"postgresql://commerce_auth_test_owner:fake@ep-example.neon.tech/commerce_auth_test"});
+        if(url===branchBase+"/auth"&&(!init?.method||init.method==="GET"))return Response.json({message:"not enabled"},{status:404});
+        if(url===branchBase+"/auth"&&init?.method==="POST")return Response.json({
+          auth_provider:"better_auth",
+          base_url:"https://ep-commerce.neonauth.eu-central-1.aws.neon.tech/commerce_auth_test/auth",
+          jwks_url:"https://ep-commerce.neonauth.eu-central-1.aws.neon.tech/commerce_auth_test/auth/.well-known/jwks.json"
+        },{status:201});
+        if(url===branchBase+"/auth/config"&&init?.method==="PATCH")return Response.json({name:"Commerce Auth Test"});
+        return Response.json({error:"unknown"},{status:500});
+      }
+    }
+  );
+
+  assert.equal(result.status,"PROVISIONED");
+  assert.equal(result.auth.enabled,true);
+  assert.equal(result.auth.created,true);
+  assert.equal(result.auth.baseUrlSecretName,"COMMERCE_AUTH_TEST_AUTH_BASE_URL");
+  assert.equal(JSON.stringify(result).includes("ep-commerce"),false);
+  assert.deepEqual(writes.map(item=>({workerName:item.workerName,name:item.name})),[
+    {workerName:"commerce-auth-test-api",name:"COMMERCE_AUTH_TEST_DATABASE_URL"},
+    {workerName:"commerce-auth-test-api",name:"COMMERCE_AUTH_TEST_AUTH_BASE_URL"}
+  ]);
+  assert.equal(writes[1].value,"https://ep-commerce.neonauth.eu-central-1.aws.neon.tech/commerce_auth_test/auth");
+  assert.ok(calls.some(call=>call.url===branchBase+"/auth"&&call.method==="POST"));
+  assert.ok(calls.some(call=>call.url===branchBase+"/auth/config"&&call.method==="PATCH"));
+});
+
+test("Managed Better Auth target stays repository-scoped", () => {
+  const base={
+    projectId:"little-frog-93793324",
+    branchId:"br-commerce-auth-test",
+    databaseName:"commerce_auth_test",
+    roleName:"commerce_auth_test_owner",
+    workerName:"commerce-auth-test-api",
+    secretName:"COMMERCE_AUTH_TEST_DATABASE_URL",
+    createMissing:true,
+    auth:{
+      provider:"better_auth",
+      applicationName:"Commerce Auth Test",
+      baseUrlSecretName:"COMMERCE_AUTH_TEST_AUTH_BASE_URL"
+    }
+  };
+  assert.throws(()=>approvedNeonTarget({
+    ...env,
+    APPFACTORY_NEON_TARGETS:JSON.stringify({
+      "Trigenys/commerce-auth-test":{
+        ...base,
+        auth:{...base.auth,baseUrlSecretName:"CLOUDFLARE_API_TOKEN"}
+      }
+    })
+  },"Trigenys/commerce-auth-test"));
+});
