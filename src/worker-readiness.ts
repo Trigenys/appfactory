@@ -18,6 +18,12 @@ interface HealthPayload {
   database_configured?: unknown;
 }
 
+interface ReadinessPayload {
+  status?: unknown;
+}
+
+const DEFAULT_READINESS_ATTEMPTS = 6;
+
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -113,8 +119,10 @@ export async function probeWorkerReadiness(
     intervalMs?: number;
   } = {}
 ): Promise<WorkerReadinessEvidence> {
-  const endpoint = `${workerUrl.replace(/\/$/, "")}/health`;
-  const maxAttempts = options.attempts ?? 24;
+  const baseUrl = workerUrl.replace(/\/$/, "");
+  const endpoint = `${baseUrl}/health`;
+  const readinessEndpoint = `${baseUrl}/health/ready`;
+  const maxAttempts = options.attempts ?? DEFAULT_READINESS_ATTEMPTS;
   const intervalMs = options.intervalMs ?? 2000;
   let lastEvidence = deployedAfterFailedProbe(endpoint, 0);
 
@@ -143,6 +151,97 @@ export async function probeWorkerReadiness(
             response.status
           );
           if (lastEvidence.state === "ready") return lastEvidence;
+
+          const healthStatus = asString(payload.status);
+          const runtime = asString(payload.runtime);
+          const databaseConfigured = asBoolean(payload.database_configured);
+
+          if (
+            databaseRequired &&
+            healthStatus === "ok" &&
+            databaseConfigured === null
+          ) {
+            try {
+              const readinessResponse = await fetch(readinessEndpoint, {
+                headers: { Accept: "application/json" }
+              });
+              const readinessText = await readinessResponse.text();
+
+              if (!readinessText) {
+                lastEvidence = {
+                  state: "degraded",
+                  checked: true,
+                  endpoint: readinessEndpoint,
+                  healthStatus,
+                  runtime,
+                  databaseConfigured: false,
+                  attempts: attempt,
+                  httpStatus: readinessResponse.status,
+                  probeError: `empty readiness response (HTTP ${readinessResponse.status})`
+                };
+              } else {
+                try {
+                  const readinessPayload = JSON.parse(
+                    readinessText
+                  ) as ReadinessPayload;
+                  const readinessStatus = asString(readinessPayload.status);
+
+                  if (
+                    readinessResponse.ok &&
+                    (readinessStatus === "ready" || readinessStatus === "ok")
+                  ) {
+                    return {
+                      state: "ready",
+                      checked: true,
+                      endpoint: readinessEndpoint,
+                      healthStatus,
+                      runtime,
+                      databaseConfigured: true,
+                      attempts: attempt,
+                      httpStatus: readinessResponse.status,
+                      probeError: null
+                    };
+                  }
+
+                  lastEvidence = {
+                    state: "degraded",
+                    checked: true,
+                    endpoint: readinessEndpoint,
+                    healthStatus,
+                    runtime,
+                    databaseConfigured: false,
+                    attempts: attempt,
+                    httpStatus: readinessResponse.status,
+                    probeError: `readiness status=${readinessStatus || "unknown"} (HTTP ${readinessResponse.status})`
+                  };
+                } catch (error) {
+                  lastEvidence = {
+                    state: "degraded",
+                    checked: true,
+                    endpoint: readinessEndpoint,
+                    healthStatus,
+                    runtime,
+                    databaseConfigured: false,
+                    attempts: attempt,
+                    httpStatus: readinessResponse.status,
+                    probeError: `invalid readiness JSON: ${probeErrorMessage(error)}`
+                  };
+                }
+              }
+            } catch (error) {
+              lastEvidence = {
+                state: "deployed",
+                checked: true,
+                endpoint: readinessEndpoint,
+                healthStatus,
+                runtime,
+                databaseConfigured: null,
+                attempts: attempt,
+                httpStatus: null,
+                probeError: probeErrorMessage(error)
+              };
+            }
+          }
         } catch (error) {
           lastEvidence = deployedAfterFailedProbe(
             endpoint,
