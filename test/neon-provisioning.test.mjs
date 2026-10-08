@@ -343,3 +343,46 @@ test("Managed Better Auth target stays repository-scoped", () => {
     })
   },"Trigenys/commerce-auth-test"));
 });
+
+
+test("retries a transient Neon state conflict when a fresh role has not propagated yet", async () => {
+  const newRepo="Trigenys/eventual-service";
+  const approved={
+    projectId:"little-frog-93793324",
+    branchId:"br-twilight-star-b2orr8hw",
+    databaseName:"eventual_service",
+    roleName:"eventual_service_owner",
+    workerName:"eventual-service-api",
+    secretName:"EVENTUAL_SERVICE_DATABASE_URL",
+    createMissing:true
+  };
+  const config={...env,APPFACTORY_NEON_TARGETS:JSON.stringify({[newRepo]:approved})};
+  let databaseCreateAttempts=0;
+  const result=await provisionApprovedNeon(
+    config,
+    {repository:newRepo},
+    {repository:newRepo},
+    {
+      listSecretNames:async()=>new Set(),
+      putSecret:async()=>{},
+      fetch:async(url,init)=>{
+        if(url.endsWith("/roles")&&init?.method==="GET") return Response.json({roles:[]});
+        if(url.endsWith("/databases")&&init?.method==="GET") return Response.json({databases:[]});
+        if(url.endsWith("/roles")&&init?.method==="POST") return Response.json({role:{name:approved.roleName}},{status:201});
+        if(url.endsWith("/databases")&&init?.method==="POST"){
+          databaseCreateAttempts += 1;
+          if(databaseCreateAttempts===1) return Response.json({error:"role pending"},{status:409});
+          return Response.json({database:{name:approved.databaseName,owner_name:approved.roleName}},{status:201});
+        }
+        if(url.includes("/connection_uri?")) return Response.json({
+          uri:"postgresql://eventual_service_owner:fake@ep-example.neon.tech/eventual_service"
+        });
+        return Response.json({error:"unknown"},{status:500});
+      }
+    }
+  );
+  assert.equal(result.status,"PROVISIONED");
+  assert.equal(result.createdRole,true);
+  assert.equal(result.createdDatabase,true);
+  assert.equal(databaseCreateAttempts,2);
+});
