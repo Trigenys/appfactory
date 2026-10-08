@@ -2,12 +2,14 @@ import type {
   CreateProjectRequest,
   Env,
   GitHubRepository,
-  WebAppPreset
+  WebAppPreset,
+  UiProfile
 } from "./types";
 
 const GITHUB_API = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const BLUEPRINT_VERSION = 1;
+const UI_REGISTRY_VERSION = 1;
 
 class GitHubWebAppApiError extends Error {
   constructor(readonly status: number, readonly path: string, detail: string) {
@@ -27,6 +29,8 @@ interface WebAppMarker {
   projectType: "webapp";
   preset: WebAppPreset;
   blueprintVersion: number;
+  uiProfile?: UiProfile;
+  uiRegistryVersion?: number;
 }
 
 async function githubRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -115,7 +119,8 @@ async function readJsonFile<T>(
 async function writeProvisioningMarker(
   token: string,
   repository: GitHubRepository,
-  preset: WebAppPreset
+  preset: WebAppPreset,
+  uiProfile?: UiProfile
 ): Promise<void> {
   const [owner, repo] = repository.full_name.split("/");
   const path = ".appfactory/webapp-provisioning.json";
@@ -124,6 +129,7 @@ async function writeProvisioningMarker(
     projectType: "webapp",
     preset,
     blueprintVersion: BLUEPRINT_VERSION,
+    ...(uiProfile ? { uiProfile, uiRegistryVersion: UI_REGISTRY_VERSION } : {}),
     complete: false
   };
 
@@ -170,7 +176,8 @@ async function materializeBlueprint(
   env: Env,
   repository: GitHubRepository,
   preset: WebAppPreset,
-  appName: string
+  appName: string,
+  uiProfile?: UiProfile
 ): Promise<string> {
   const targetOwner = env.GITHUB_OWNER || "Trigenys";
   const sourceOwner = env.GITHUB_WEBAPP_BLUEPRINT_OWNER || targetOwner;
@@ -190,10 +197,48 @@ async function materializeBlueprint(
   const sourceBlobs = tree.tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix));
   if (sourceBlobs.length === 0) throw new Error(`No files found for webapp blueprint ${preset}.`);
 
+  // The default blueprint remains unchanged; add owned UI components only when selected.
+  const profileExtras: Array<{ sourcePath: string; targetPath: string }> = uiProfile ? [
+    { sourcePath: "ui-registry/templates/ProfileApp.tsx", targetPath: "src/App.tsx" },
+    { sourcePath: "ui-registry/templates/ProfileStyles.css", targetPath: "src/styles.css" },
+    { sourcePath: "ui-registry/components/UiButton.tsx", targetPath: "src/components/ui/UiButton.tsx" },
+    { sourcePath: "ui-registry/components/UiCard.tsx", targetPath: "src/components/ui/UiCard.tsx" },
+    { sourcePath: "ui-registry/components/WhatsAppCta.tsx", targetPath: "src/components/ui/WhatsAppCta.tsx" },
+    { sourcePath: "ui-registry/components/ui.css", targetPath: "src/components/ui/ui.css" }
+  ] : [];
+  let tokens: Record<string, string> = {};
+  if (uiProfile) {
+    const config = tree.tree.find((entry) => entry.type === "blob" && entry.path === "ui-registry/profiles.json");
+    if (!config) throw new Error("UI profile catalog is missing from the AppFactory source.");
+    const source = await githubRequest<{ content: string; encoding: string }>(
+      token, `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${config.sha}`
+    );
+    if (source.encoding !== "base64") throw new Error("Unsupported UI profile catalog encoding.");
+    const catalog = JSON.parse(decodeBase64(source.content)) as {
+      version: number;
+      profiles: Record<string, { tokens: Record<string, string> }>;
+    };
+    if (catalog.version !== UI_REGISTRY_VERSION || !catalog.profiles[uiProfile]) {
+      throw new Error(`Unsupported UI registry version or profile: ${uiProfile}.`);
+    }
+    tokens = catalog.profiles[uiProfile].tokens;
+    if (!["bg", "surface", "text", "muted", "accent", "border", "radius"].every((key) => !!tokens[key])) {
+      throw new Error(`Incomplete tokens for UI profile ${uiProfile}.`);
+    }
+  }
+  const mappedFiles = [
+    ...sourceBlobs.map((entry) => ({ entry, targetPath: entry.path.slice(prefix.length) })),
+    ...profileExtras.map(({ sourcePath, targetPath }) => {
+      const entry = tree.tree.find((item) => item.type === "blob" && item.path === sourcePath);
+      if (!entry) throw new Error(`Required UI Registry source missing: ${sourcePath}.`);
+      return { entry, targetPath };
+    })
+  ];
+
   const [, targetRepo] = repository.full_name.split("/");
   const binaryExtensions = [".ico", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"];
 
-  const targetEntries = await Promise.all(sourceBlobs.map(async (entry) => {
+  const targetEntries = await Promise.all(mappedFiles.map(async ({ entry, targetPath }) => {
     const sourceBlob = await githubRequest<{ content: string; encoding: string }>(
       token,
       `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
@@ -201,13 +246,22 @@ async function materializeBlueprint(
     if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
 
     const isBinary = binaryExtensions.some((extension) => entry.path.toLowerCase().endsWith(extension));
-    const content = isBinary
-      ? sourceBlob.content.replace(/\s+/g, "")
-      : encodeBase64(renderBlueprintText(decodeBase64(sourceBlob.content), {
-          owner: targetOwner,
-          name: appName,
-          slug: repository.name
-        }));
+    let rendered = isBinary ? "" : renderBlueprintText(decodeBase64(sourceBlob.content), {
+      owner: targetOwner,
+      name: appName,
+      slug: repository.name
+    });
+    if (uiProfile && targetPath === "src/styles.css") {
+      for (const [key, value] of Object.entries(tokens)) {
+        rendered = rendered.replaceAll(`__UI_${key.toUpperCase()}__`, value);
+      }
+      if (/__UI_[A-Z_]+__/.test(rendered)) throw new Error("Unresolved UI profile token.");
+    }
+    if (uiProfile && targetPath === ".appfactory/webapp.json") {
+      const marker = JSON.parse(rendered) as WebAppMarker;
+      rendered = `${JSON.stringify({ ...marker, uiProfile, uiRegistryVersion: UI_REGISTRY_VERSION }, null, 2)}\n`;
+    }
+    const content = isBinary ? sourceBlob.content.replace(/\s+/g, "") : encodeBase64(rendered);
 
     const targetBlob = await githubRequest<{ sha: string }>(
       token,
@@ -219,7 +273,7 @@ async function materializeBlueprint(
     );
 
     return {
-      path: entry.path.slice(prefix.length),
+      path: targetPath,
       mode: entry.mode,
       type: "blob",
       sha: targetBlob.sha
@@ -229,7 +283,7 @@ async function materializeBlueprint(
   const targetTree = await githubRequest<{ sha: string }>(
     token,
     `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/trees`,
-    { method: "POST", body: JSON.stringify({ tree: targetEntries }) }
+    { method: "POST", body: JSON.stringify({ tree: [...new Map(targetEntries.map((entry) => [entry.path, entry])).values()] }) }
   );
   const parentSha = await getHeadSha(token, repository);
   const commit = await githubRequest<{ sha: string }>(
@@ -281,6 +335,12 @@ export async function provisionWebAppRepository(
   if (repository) {
     const marker = await readJsonFile<WebAppMarker>(token, repository, ".appfactory/webapp.json");
     if (markerMatches(marker, input.preset)) {
+      if (marker.uiProfile !== input.uiProfile) {
+        throw new Error(`Repository ${repository.full_name} already has UI profile ${marker.uiProfile || "none"}; refusing to overwrite it with ${input.uiProfile || "none"}.`);
+      }
+      if (input.uiProfile && marker.uiRegistryVersion !== UI_REGISTRY_VERSION) {
+        throw new Error(`Repository ${repository.full_name} uses a different UI registry version; upgrade required.`);
+      }
       if (marker.blueprintVersion === BLUEPRINT_VERSION) {
         return {
           repository,
@@ -299,17 +359,17 @@ export async function provisionWebAppRepository(
       repository,
       ".appfactory/webapp-provisioning.json"
     );
-    if (!provisioning || provisioning.preset !== input.preset || provisioning.complete !== false) {
+    if (!provisioning || provisioning.preset !== input.preset || provisioning.complete !== false || provisioning.uiProfile !== input.uiProfile) {
       throw new Error(
         `Repository ${repository.full_name} already exists and is not managed by the requested webapp preset.`
       );
     }
   } else {
     repository = await createRepository(token, owner, input);
-    await writeProvisioningMarker(token, repository, input.preset);
+    await writeProvisioningMarker(token, repository, input.preset, input.uiProfile);
   }
 
-  const commitSha = await materializeBlueprint(token, env, repository, input.preset, input.name);
+  const commitSha = await materializeBlueprint(token, env, repository, input.preset, input.name, input.uiProfile);
   return {
     repository,
     commitSha,

@@ -70,3 +70,12 @@ test("unknown files fail safe into core instead of silently skipping CI", () => 
   assert.equal(result.gates.core, true);
   assert.deepEqual(result.fallback, ["future/new-surface.config"]);
 });
+
+test("UI Registry changes run core and webapp, not unrelated platform gates", () => {
+  const result = classifyChanges(["ui-registry/components/UiButton.tsx"], config);
+  assert.equal(result.gates.core, true);
+  assert.equal(result.gates.webapp, true);
+  assert.equal(result.gates.android, false);
+  assert.equal(result.gates.desktop, false);
+  assert.equal(result.gates.service, false);
+});

@@ -23,7 +23,8 @@
     "test:infrastructure-environments": "node --test test/infrastructure-environments.test.mjs",
     "test:database-lease": "node --test test/database-lease.test.mjs",
     "test:neon-provisioning": "node --test test/neon-provisioning.test.mjs",
-    "test:typescript-worker-runtime": "node --test test/typescript-worker-runtime.test.mjs"
+    "test:typescript-worker-runtime": "node --test test/typescript-worker-runtime.test.mjs",
+    "test:ui-registry": "node --test test/ui-registry.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",

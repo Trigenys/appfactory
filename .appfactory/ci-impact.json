@@ -30,7 +30,8 @@
       "prefixes": [
         "src/",
         "test/",
-        "blueprints/entitlements/"
+        "blueprints/entitlements/",
+        "ui-registry/"
       ]
     },
     "android": {
@@ -54,7 +55,8 @@
         "src/webapp-provisioning.ts"
       ],
       "prefixes": [
-        "blueprints/react-vite/"
+        "blueprints/react-vite/",
+        "ui-registry/"
       ]
     },
     "service": {
