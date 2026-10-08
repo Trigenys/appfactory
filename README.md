@@ -217,7 +217,7 @@ See [Mutation authentication](docs/mutation-authentication.md).
 
 ### Brownfield Worker self-service
 
-Existing Trigenys repositories can provision their own Cloudflare Python Worker without receiving the AppFactory Cloudflare credentials.
+Existing Trigenys repositories can provision their own Cloudflare Worker without receiving the AppFactory Cloudflare credentials. The historical Python/Pywrangler path remains the default, and repositories can now explicitly select the reusable `typescript-wrangler` runtime for TypeScript/Hono-style APIs.
 
 The repository must call `POST /infrastructure/worker` from the exact workflow:
 
@@ -227,16 +227,20 @@ The repository must call `POST /infrastructure/worker` from the exact workflow:
 
 Authentication is a short-lived GitHub Actions OIDC token with audience `appfactory-api`. AppFactory validates the token signature, organization, protected main ref and exact workflow identity. The caller may provision only the repository named by its own OIDC claim.
 
-The first supported brownfield recipe is deliberately narrow:
+The brownfield recipes are deliberately narrow:
 
 - Worker name is derived from the repository: `<repo>-api`;
 - root directory is `/backend`;
-- build/deploy commands are the reviewed Pywrangler recipe;
+- omitted `runtime` preserves the reviewed Python/Pywrangler recipe;
+- `runtime: "typescript-wrangler"` selects the reviewed Node/TypeScript recipe (`npm ci --ignore-scripts && npm run check` then local Wrangler deploy);
+- build/deploy command mixing or arbitrary commands are rejected;
 - Worker runtime secret names must use the repository prefix;
 - an existing Worker without an AppFactory ownership marker is never silently adopted;
 - AppFactory deliberately separates Cloudflare resource authorization from Workers Builds authorization: resource calls prefer `CLOUDFLARE_PAGES_D1_TOKEN`, while `/builds/*` calls keep using the user-scoped `CLOUDFLARE_API_TOKEN`. This matches Cloudflare's current API constraint that Workers Builds requires a user-scoped token. Creating a brand-new Worker uses the explicit Worker resource API and requires Workers product-level Admin; bootstrap code is uploaded only after the resource exists. If bootstrap upload fails, AppFactory removes the empty Worker so retries stay idempotent.
 
 This keeps `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` out of product repositories. Product-specific secrets may cross the authenticated OIDC request and are written directly to that product's Worker; AppFactory never returns secret values.
+
+See [TypeScript/Wrangler brownfield Worker runtime](docs/typescript-worker-runtime.md) for the reusable runtime contract.
 
 ### Brownfield Pages self-service
 
