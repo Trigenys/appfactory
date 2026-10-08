@@ -71,3 +71,11 @@ test("dedicated per-profile secrets extend managed Hyperdrive profiles without r
   assert.match(source, /if \(dedicated\) return validateProfile\(profileName, dedicated\)/);
   assert.match(source, /const profile = managedProfile\(env, request\.profile\)/);
 });
+
+
+test("dedicated connection URL secret is wired for one managed profile", () => {
+  assert.match(source, /HYPERDRIVE_DATABASE_URL__/);
+  assert.match(source, /function dedicatedUrlSecretName/);
+  assert.match(source, /function parseDedicatedConnectionUrl/);
+  assert.match(source, /const dedicatedUrl = parseDedicatedConnectionUrl\(env, profileName\)/);
+});
