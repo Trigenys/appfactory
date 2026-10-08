@@ -62,3 +62,12 @@ test("missing Hyperdrive profiles fail closed without exposing credential values
   assert.match(source, /Available managed profiles/);
   assert.doesNotMatch(source, /JSON\.stringify\(profiles\)/);
 });
+
+test("dedicated per-profile secrets extend managed Hyperdrive profiles without replacing the legacy map", () => {
+  assert.match(source, /HYPERDRIVE_DATABASE_PROFILE__/);
+  assert.match(source, /function dedicatedProfileSecretName/);
+  assert.match(source, /function parseDedicatedProfile/);
+  assert.match(source, /const dedicated = parseDedicatedProfile\(env, profileName\)/);
+  assert.match(source, /if \(dedicated\) return validateProfile\(profileName, dedicated\)/);
+  assert.match(source, /const profile = managedProfile\(env, request\.profile\)/);
+});
