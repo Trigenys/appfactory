@@ -37,7 +37,7 @@ AppFactory owns the deployment recipe:
 
 ```text
 root:   /backend
-build:  npm ci --ignore-scripts && npm run check
+build:  npm install --ignore-scripts --no-audit --no-fund && npm run check
 deploy: ./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars
 build environment: NODE_VERSION=24
 ```
@@ -45,7 +45,7 @@ build environment: NODE_VERSION=24
 The backend therefore owns:
 
 - `backend/package.json`;
-- a committed `backend/package-lock.json`;
+- a committed `backend/package-lock.json` is recommended after the first install, but is not required to bootstrap an existing repository;
 - a `check` script that performs the repository's validation gate;
 - a local `wrangler` development dependency;
 - `backend/wrangler.production.jsonc`;
