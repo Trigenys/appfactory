@@ -60,10 +60,13 @@ test("default R2 fetch preserves the Cloudflare Worker runtime binding", () => {
 });
 
 
-test("R2 retries an authorization failure with the fallback Cloudflare token", () => {
-  assert.match(source, /const fallbackToken = env\.CLOUDFLARE_API_TOKEN/);
+test("R2 prefers a dedicated token and can fall back on auth failures", () => {
+  assert.match(source, /env\.CLOUDFLARE_R2_TOKEN/);
+  assert.match(source, /env\.CLOUDFLARE_PAGES_D1_TOKEN/);
+  assert.match(source, /env\.CLOUDFLARE_API_TOKEN/);
+  assert.match(source, /const unique = \[\.\.\.new Set\(tokens\)\]/);
+  assert.match(source, /for \(let index = 0; index < tokens\.length; index \+= 1\)/);
   assert.match(source, /error instanceof CloudflareR2ApiError/);
   assert.match(source, /error\.status === 401 \|\| error\.status === 403/);
-  assert.match(source, /fallbackToken !== preferredToken/);
-  assert.match(source, /return cloudflareRequestWithToken<T>\([\s\S]*fallbackToken/);
+  assert.match(source, /index < tokens\.length - 1/);
 });
