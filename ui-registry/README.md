@@ -74,3 +74,11 @@ A consumer may eventually store the documented contract as `.github/appfactory-f
 When selecting inspiration for a plain-CSS React/Vite project, a Tailwind source is marked `adaptation-reference` and remains **non-installable**. Non-React projects receive a design reference only. This metadata classification is not a production compatibility certification.
 
 The existing `uiProfile` provisioning path and `registry.json` files remain authoritative and are not modified by WOW research mode.
+
+## WOW security gate (#140)
+
+**No external source is currently approved for code reuse.** The central `wow-review-policy.json` has zero approvals. Source discovery still works, but listing a repository or claiming an MIT license does not authorize copying, installing or executing code.
+
+A reviewed approval must cite the exact upstream 40-character commit, pinned LICENSE/COPYING evidence, reviewed SPDX license, reviewer and mandatory notice file. `wow-security.mjs` exposes read-only status/eligibility checks and deterministic per-consumer provenance reconciliation; it never executes an installer or writes into a consumer repository.
+
+Run `npm run test:ui-registry` for both contract and security checks. See [the security and provenance runbook](../docs/wow-reuse-security.md) before proposing any change to `wow-review-policy.json`.
