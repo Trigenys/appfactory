@@ -1,0 +1,10 @@
+{
+  "name": "Trigenys Engineering OS",
+  "slug": "trigenys-engineering-os",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "Reusable RAIDER-governed engineering skills, multi-agent playbooks, Cursor/Claude Code/Codex adapters and quality gates.",
+  "brief": "Shared engineering skills and multi-agent orchestration toolkit. Code-first documentation, reproducible validations, multi-model routing, RAIDER, test pyramid and evidence-based research. Do not deploy infrastructure or provision a database.",
+  "language": "fr"
+}
