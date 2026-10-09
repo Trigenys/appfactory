@@ -60,7 +60,7 @@ class CloudflareR2ApiError extends Error {
   }
 }
 
-function resourceToken(env: Env): string {
+function preferredResourceToken(env: Env): string {
   const token = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
   if (!token) {
     throw new R2ProvisioningError(
@@ -81,19 +81,17 @@ function assertConfig(env: Env): asserts env is Env & {
       "R2 provisioning requires CLOUDFLARE_ACCOUNT_ID."
     );
   }
-  resourceToken(env);
+  preferredResourceToken(env);
 }
 
-async function cloudflareRequest<T>(
-  env: Env,
+async function cloudflareRequestWithToken<T>(
+  token: string,
   deps: R2Dependencies,
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  assertConfig(env);
-
   const headers = new Headers(init.headers);
-  headers.set("Authorization", "Bearer " + resourceToken(env));
+  headers.set("Authorization", "Bearer " + token);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -132,6 +130,42 @@ async function cloudflareRequest<T>(
   }
 
   return payload.result;
+}
+
+async function cloudflareRequest<T>(
+  env: Env,
+  deps: R2Dependencies,
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  assertConfig(env);
+
+  const preferredToken = preferredResourceToken(env);
+  try {
+    return await cloudflareRequestWithToken<T>(
+      preferredToken,
+      deps,
+      path,
+      init
+    );
+  } catch (error) {
+    const fallbackToken = env.CLOUDFLARE_API_TOKEN;
+    const canRetryWithFallback =
+      error instanceof CloudflareR2ApiError &&
+      (error.status === 401 || error.status === 403) &&
+      Boolean(env.CLOUDFLARE_PAGES_D1_TOKEN) &&
+      Boolean(fallbackToken) &&
+      fallbackToken !== preferredToken;
+
+    if (!canRetryWithFallback || !fallbackToken) throw error;
+
+    return cloudflareRequestWithToken<T>(
+      fallbackToken,
+      deps,
+      path,
+      init
+    );
+  }
 }
 
 function mapCloudflareError(error: unknown, operation: string): never {
