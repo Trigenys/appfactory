@@ -60,7 +60,7 @@ export function validateWowReviewPolicy(policy, inventory) {
     if (!source || a.repository !== source.repository) errors.push(label + " repository mismatch");
     if (seen.has(a.sourceId)) errors.push(label + " duplicate approval");
     seen.add(a.sourceId);
-    if (policy.blocked?.includes(a.sourceId)) errors.push(label + " blocked sources cannot be approved");
+    if (Array.isArray(policy.blocked) && policy.blocked.includes(a.sourceId)) errors.push(label + " blocked sources cannot be approved");
     if (!SHA.test(a.commit ?? "")) errors.push(label + " immutable 40-character commit SHA required");
     if (!SPDX.has(a.spdx)) errors.push(label + " unsupported or unreviewed SPDX license");
     if (!allowedEvidenceURL(a.repository, a.commit, a.licenseEvidenceUrl))
