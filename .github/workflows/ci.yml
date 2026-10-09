@@ -121,6 +121,8 @@ jobs:
         run: npm run test:typescript-worker-runtime
       - name: Validate reusable R2 provisioning
         run: npm run test:r2-provisioning
+      - name: Validate R2 provisioning through Workers Builds
+        run: npm run test:r2-worker-build
       - name: Validate infrastructure environment isolation
         run: npm run test:infrastructure-environments
       - name: Validate Worker migration release gate
