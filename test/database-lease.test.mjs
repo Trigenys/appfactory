@@ -28,7 +28,10 @@ test("OIDC database lease trust is pinned to approved collector workflows on mai
   assert.match(auth,/Trigenys\/trigenys-editorial-os/);
   assert.match(auth,/\.github\/workflows\/news-scout\.yml@/);
   assert.match(auth,/claims\.workflow_ref !== allowedWorkflow/);
-  assert.match(auth,/claims\.event_name !== "schedule" && claims\.event_name !== "workflow_dispatch"/);
+  assert.match(auth,/claims\.event_name === "schedule"/);
+  assert.match(auth,/claims\.event_name === "workflow_dispatch"/);
+  assert.match(auth,/repository === "Trigenys\/trigenys-editorial-os"/);
+  assert.match(auth,/claims\.event_name === "push"/);
 });
 
 test("only exact repository requests allowed and arbitrary profile selectors rejected",()=>{

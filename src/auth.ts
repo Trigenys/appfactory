@@ -318,11 +318,18 @@ export async function authenticateDatabaseLease(
       "Database access is restricted to approved collector workflows on main."
     );
   }
-  if (claims.event_name !== "schedule" && claims.event_name !== "workflow_dispatch") {
+  const eventAllowed =
+    claims.event_name === "schedule" ||
+    claims.event_name === "workflow_dispatch" ||
+    (
+      repository === "Trigenys/trigenys-editorial-os" &&
+      claims.event_name === "push"
+    );
+  if (!eventAllowed) {
     throw new AuthenticationError(
       403,
       "DATABASE_LEASE_EVENT_FORBIDDEN",
-      "Database leases are available only to scheduled or manually dispatched monitoring jobs."
+      "Database lease event is not allowed for this collector."
     );
   }
   return claims;
