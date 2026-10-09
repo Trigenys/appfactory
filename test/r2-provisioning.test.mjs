@@ -58,3 +58,12 @@ test("default R2 fetch preserves the Cloudflare Worker runtime binding", () => {
     /deps: R2Dependencies = \{[\s\S]*fetch: \(input, init\) => fetch\(input, init\)[\s\S]*\}/
   );
 });
+
+
+test("R2 retries an authorization failure with the fallback Cloudflare token", () => {
+  assert.match(source, /const fallbackToken = env\.CLOUDFLARE_API_TOKEN/);
+  assert.match(source, /error instanceof CloudflareR2ApiError/);
+  assert.match(source, /error\.status === 401 \|\| error\.status === 403/);
+  assert.match(source, /fallbackToken !== preferredToken/);
+  assert.match(source, /return cloudflareRequestWithToken<T>\([\s\S]*fallbackToken/);
+});
