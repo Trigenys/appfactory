@@ -47,3 +47,30 @@ The current supported consumption path is AppFactory provisioning only.
 
 P0 source/provisioning integration. Visual regression, independently built registry
 endpoint, full shadcn CLI support and OpenPage adapter are follow-ups.
+
+
+## WOW Frontend external discovery contract (v1, opt-in)
+
+The existing `registry.json` is the **only native component catalog** and remains unchanged.
+
+- `wow-sources.json` is a separate, reviewed **external source metadata inventory**, not a second UI component registry.
+- `schemas/wow-sources.schema.json` and `schemas/wow-consumer.schema.json` define the versioned data contracts.
+- `wow-contract.mjs` validates both contracts deterministically with built-in Node.js APIs, no third-party dependencies or network calls.
+- `examples/wow-react-vite-css.json` shows a read-only/opt-in config appropriate for brownfield React/Vite + plain CSS.
+- `test/wow-frontend-contract.test.mjs` is executed by the existing `npm run test:ui-registry` CI gate.
+
+Read-only validation:
+
+```bash
+node ui-registry/wow-contract.mjs
+node ui-registry/wow-contract.mjs ui-registry/examples/wow-react-vite-css.json
+npm run test:ui-registry
+```
+
+A consumer may eventually store the documented contract as `.github/appfactory-frontend.json`; this initial release **does not** provision from that file, install packages, copy third-party code, authenticate to 21st.dev/MagicPath, or change the consumer stack.
+
+**Source inventory policy:** all external source entries in v1 have `reuse: "reference-only"` and `executionAllowed: false`. SPDX values with `verification: "metadata-only"` describe GitHub metadata, **not permission to import code**. Missing/unverified licensing is also reference-only. Later implementation issues #140 and #142 must explicitly review terms, immutable refs, provenance and adapters before introducing adoption.
+
+When selecting inspiration for a plain-CSS React/Vite project, a Tailwind source is marked `adaptation-reference` and remains **non-installable**. Non-React projects receive a design reference only. This metadata classification is not a production compatibility certification.
+
+The existing `uiProfile` provisioning path and `registry.json` files remain authoritative and are not modified by WOW research mode.

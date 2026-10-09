@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "purpose": "discovery-only",
+  "description": "External inspiration/source-discovery metadata; existing registry.json remains the only native component source. No code import or execution is authorized.",
+  "sources": [
+    {
+      "id": "21st-magic-mcp",
+      "repository": "https://github.com/21st-dev/magic-mcp",
+      "kind": "mcp",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "ISC",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "magic-ui",
+      "repository": "https://github.com/magicuidesign/magicui",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "ui-layouts",
+      "repository": "https://github.com/ui-layouts/uilayouts",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "tailark",
+      "repository": "https://github.com/tailark/blocks",
+      "kind": "block",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "beui",
+      "repository": "https://github.com/starc007/ui-components",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "web-interface-guidelines",
+      "repository": "https://github.com/vercel-labs/web-interface-guidelines",
+      "kind": "guidelines",
+      "frameworks": [
+        "any"
+      ],
+      "styling": [
+        "any"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "low",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "react-bits",
+      "repository": "https://github.com/DavidHDev/react-bits",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "css",
+        "tailwind"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "animate-ui",
+      "repository": "https://github.com/imskyleen/animate-ui",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "motion-primitives-website",
+      "repository": "https://github.com/itsjwill/motion-primitives-website",
+      "kind": "component",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-09"
+    }
+  ]
+}

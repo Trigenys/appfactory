@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "enabled": true,
+  "profile": "marketing-wow",
+  "stack": {
+    "framework": "react-vite",
+    "styling": "css",
+    "typescript": true
+  },
+  "sources": {
+    "mode": "reference-only",
+    "allow": [
+      "magic-ui",
+      "ui-layouts",
+      "web-interface-guidelines"
+    ]
+  },
+  "motion": {
+    "mode": "intentional",
+    "reducedMotion": "required"
+  },
+  "quality": {
+    "desktopViewport": 1440,
+    "mobileViewport": 390,
+    "maxLcpMs": 2500,
+    "maxCls": 0.1,
+    "maxTotalBlockingTimeMs": 200,
+    "requireKeyboardPass": true,
+    "requireNoHorizontalOverflow": true
+  }
+}

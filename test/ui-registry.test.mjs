@@ -1,3 +1,4 @@
+import "./wow-frontend-contract.test.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";

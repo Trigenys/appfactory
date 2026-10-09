@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Trigenys/appfactory/blob/main/ui-registry/schemas/wow-sources.schema.json",
+  "title": "AppFactory WOW Frontend external source inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "purpose",
+    "description",
+    "sources"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "purpose": {
+      "const": "discovery-only"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "repository",
+          "kind",
+          "frameworks",
+          "styling",
+          "license",
+          "reuse",
+          "reviewedCommit",
+          "executionAllowed",
+          "risk",
+          "reviewedOn"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+          },
+          "repository": {
+            "type": "string",
+            "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "component",
+              "block",
+              "guidelines"
+            ]
+          },
+          "frameworks": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(any|[a-z][a-z0-9-]{0,47})$"
+            }
+          },
+          "styling": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^(any|[a-z][a-z0-9-]{0,47})$"
+            }
+          },
+          "license": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "spdx",
+              "verification"
+            ],
+            "properties": {
+              "spdx": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "verification": {
+                "enum": [
+                  "metadata-only",
+                  "unverified"
+                ]
+              }
+            }
+          },
+          "reuse": {
+            "const": "reference-only"
+          },
+          "reviewedCommit": {
+            "type": "null"
+          },
+          "executionAllowed": {
+            "const": false
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "reviewedOn": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      }
+    }
+  }
+}
