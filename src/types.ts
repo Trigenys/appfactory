@@ -67,6 +67,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_PAGES_D1_TOKEN?: string;
+  /** Dedicated least-privilege token for AppFactory R2 bucket provisioning. */
+  CLOUDFLARE_R2_TOKEN?: string;
   CLOUDFLARE_BUILD_TOKEN_UUID?: string;
   CLOUDFLARE_BUILD_TOKEN_SOURCE_WORKER?: string;
   HYPERDRIVE_DATABASE_PROFILES?: string;
