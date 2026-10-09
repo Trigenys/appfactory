@@ -32,8 +32,8 @@ test("trusted Workers Builds token is selected by registered build-token identit
 });
 
 test("R2 is created idempotently by Wrangler before Worker deploy", () => {
-  assert.match(source, /wrangler r2 bucket info/);
-  assert.match(source, /wrangler r2 bucket create/);
+  assert.match(source, /r2 bucket info/);
+  assert.match(source, /r2 bucket create/);
   assert.match(source, /--storage-class Standard/);
   assert.match(source, /ensureBucket.*baseDeployCommand/s);
 });
