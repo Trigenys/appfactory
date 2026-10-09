@@ -47,6 +47,11 @@ import {
   provisionHyperdrive,
   type HyperdriveProvisioningRequest
 } from "./hyperdrive";
+import {
+  R2ProvisioningError,
+  provisionR2,
+  type R2ProvisioningRequest
+} from "./r2-provisioning";
 
 type ValidatedProjectInput = ReturnType<typeof validateCreateProject>;
 type ProjectInputResult =
@@ -797,6 +802,96 @@ async function provisionExistingPagesD1(
   }
 }
 
+async function provisionExistingR2(
+  request: Request,
+  env: Env,
+  claims: GitHubOidcClaims
+): Promise<Response> {
+  if (!claims.repository) {
+    return json(
+      {
+        error: "OIDC_REPOSITORY_REQUIRED",
+        message: "GitHub OIDC token does not identify a repository."
+      },
+      403
+    );
+  }
+
+  let payload: R2ProvisioningRequest;
+  try {
+    payload = await request.json() as R2ProvisioningRequest;
+  } catch {
+    return json(
+      {
+        error: "INVALID_JSON",
+        message: "Request body must contain valid JSON."
+      },
+      400
+    );
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    typeof payload.repository !== "string" ||
+    typeof payload.recipe !== "string"
+  ) {
+    return json(
+      {
+        error: "INVALID_INFRASTRUCTURE_REQUEST",
+        message: "R2 request must include repository and recipe."
+      },
+      400
+    );
+  }
+
+  try {
+    const result = await provisionR2(env, claims.repository, payload);
+    return json(
+      {
+        status: "PROVISIONED",
+        infrastructure: result
+      },
+      200
+    );
+  } catch (error) {
+    if (error instanceof R2ProvisioningError) {
+      const conflictCodes = new Set([
+        "REPOSITORY_MISMATCH",
+        "UNSUPPORTED_R2_RECIPE",
+        "R2_BUCKET_MISMATCH",
+        "R2_BUCKET_NAME_INVALID",
+        "R2_PUBLIC_ACCESS_NOT_DISABLED"
+      ]);
+      return json(
+        {
+          error: error.code,
+          message: error.message,
+          requiredPermissions: error.requiredPermissions
+        },
+        error.code === "CLOUDFLARE_R2_ACCESS_DENIED"
+          ? 502
+          : conflictCodes.has(error.code)
+            ? 409
+            : 400
+      );
+    }
+
+    return json(
+      {
+        error: "R2_PROVISIONING_FAILED",
+        message:
+          env.ENVIRONMENT === "production"
+            ? "R2 provisioning failed. Check AppFactory logs for details."
+            : error instanceof Error
+              ? error.message
+              : "R2 provisioning failed."
+      },
+      500
+    );
+  }
+}
+
 async function provisionExistingHyperdrive(
   request: Request,
   env: Env,
@@ -1063,6 +1158,7 @@ export default {
         url.pathname === "/infrastructure/worker" ||
         url.pathname === "/infrastructure/pages" ||
         url.pathname === "/infrastructure/pages-d1" ||
+        url.pathname === "/infrastructure/r2" ||
         url.pathname === "/infrastructure/hyperdrive"
       )
     ) {
@@ -1112,6 +1208,14 @@ export default {
       infrastructureClaims
     ) {
       return provisionExistingPagesD1(request, env, infrastructureClaims);
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/infrastructure/r2" &&
+      infrastructureClaims
+    ) {
+      return provisionExistingR2(request, env, infrastructureClaims);
     }
 
     if (
