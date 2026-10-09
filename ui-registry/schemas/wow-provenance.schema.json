@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Trigenys/appfactory/blob/main/ui-registry/schemas/wow-provenance.schema.json",
+  "title": "WOW Frontend consumer component provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "entries"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "repository",
+          "commit",
+          "component",
+          "spdx",
+          "mode",
+          "files",
+          "noticeFile",
+          "reviewer",
+          "licenseEvidenceUrl"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"
+          },
+          "repository": {
+            "type": "string",
+            "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{40}$"
+          },
+          "component": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+          },
+          "spdx": {
+            "enum": [
+              "MIT",
+              "ISC",
+              "Apache-2.0",
+              "BSD-2-Clause",
+              "BSD-3-Clause"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "copy-adapt",
+              "registry-install"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 3
+            }
+          },
+          "noticeFile": {
+            "type": "string",
+            "minLength": 8
+          },
+          "reviewer": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,39}$"
+          },
+          "licenseEvidenceUrl": {
+            "type": "string",
+            "minLength": 70
+          }
+        }
+      }
+    }
+  }
+}
