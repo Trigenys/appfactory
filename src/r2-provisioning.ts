@@ -177,7 +177,7 @@ function mapCloudflareError(error: unknown, operation: string): never {
   ) {
     throw new R2ProvisioningError(
       "CLOUDFLARE_R2_ACCESS_DENIED",
-      `Cloudflare rejected ${operation}. Check the AppFactory resource token scope.`,
+      `Cloudflare rejected ${operation} (HTTP ${error.status}; ${error.detail.slice(0, 240)}).`,
       ["Workers R2 Storage Edit"]
     );
   }
