@@ -51,14 +51,23 @@ No repository should absorb the responsibilities of the others simply for conven
 
 ### 4.1 A curated source registry
 
-Add a versioned machine-readable registry:
+Extend the **existing** `ui-registry/` created by PR #122, without making a duplicate component registry:
 
 ```text
-catalog/
-  wow-frontend.sources.json
-schemas/
-  wow-frontend.sources.schema.json
+ui-registry/
+  registry.json                 # native Trigenys-authored components (unchanged)
+  provenance.json               # existing native component provenance (unchanged)
+  profiles.json                 # existing opt-in UI profiles (unchanged)
+  wow-sources.json              # v1 external discovery metadata only
+  wow-contract.mjs              # deterministic, offline contract validation
+  schemas/
+    wow-sources.schema.json
+    wow-consumer.schema.json
+  examples/
+    wow-react-vite-css.json
 ```
+
+**Phase #139 is strictly reference-only**: no external source may be installed, executed or copied from this inventory. Later issues #140 (licensing/provenance) and #142 (adapters/compatibility) must explicitly review the promotion process. The inventory describes external discovery, not shadcn registry items.
 
 Each source entry should describe:
 
@@ -130,7 +139,7 @@ Proposed v1 shape:
   },
   "sources": {
     "allow": ["magic-ui", "ui-layouts", "tailark", "beui"],
-    "allowReferenceOnly": true
+    "mode": "reference-only"
   },
   "motion": {
     "mode": "intentional",
@@ -148,7 +157,7 @@ Proposed v1 shape:
 }
 ```
 
-The schema must allow other frameworks/styling systems instead of hard-coding this example.
+The schema allows other frameworks/styling systems instead of hard-coding this example. In #139, enabled contracts are research-only: no automatic installations or changes to existing provisioning.
 
 ### 4.4 Source adoption modes
 
@@ -234,7 +243,7 @@ Each primitive needs accessibility, reduced-motion and responsive behavior befor
 
 ## 5. Curated GitHub sources
 
-Initial reviewed catalog:
+Initial research catalog (all sources are **reference-only in contract v1**, regardless of the possibilities listed for later reviewed adoption):
 
 | Source | Intended use | License state | AppFactory policy |
 | --- | --- | --- | --- |
