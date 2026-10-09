@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Trigenys/appfactory/blob/main/ui-registry/schemas/wow-consumer.schema.json",
+  "title": "AppFactory WOW Frontend optional consumer contract v1",
+  "description": "Research-only v1; does not authorize code import, installs or framework migrations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "enabled"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,47}$"
+    },
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framework",
+        "styling",
+        "typescript"
+      ],
+      "properties": {
+        "framework": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        },
+        "styling": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,47}$"
+        },
+        "typescript": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "allow"
+      ],
+      "properties": {
+        "mode": {
+          "const": "reference-only"
+        },
+        "allow": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,63}$"
+          }
+        }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "reducedMotion"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "intentional"
+          ]
+        },
+        "reducedMotion": {
+          "const": "required"
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "desktopViewport": {
+          "type": "integer",
+          "minimum": 800,
+          "maximum": 3840
+        },
+        "mobileViewport": {
+          "type": "integer",
+          "minimum": 320,
+          "maximum": 768
+        },
+        "maxLcpMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "maxCls": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "maxTotalBlockingTimeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "requireKeyboardPass": {
+          "const": true
+        },
+        "requireNoHorizontalOverflow": {
+          "const": true
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "then": {
+        "required": [
+          "profile",
+          "stack",
+          "sources",
+          "motion"
+        ]
+      }
+    }
+  ]
+}
