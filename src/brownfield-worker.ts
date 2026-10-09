@@ -11,6 +11,7 @@ import {
   probeWorkerReadiness,
   type WorkerReadinessEvidence
 } from "./worker-readiness";
+import { r2BucketName } from "./r2-provisioning";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
@@ -109,6 +110,7 @@ interface WorkerMarker {
   rootDirectory: string;
   buildCommand: string;
   deployCommand: string;
+  r2Recipe?: "private-media";
   migrationRecipe?: "python-alembic";
   migrationProfile?: string;
   databaseUrlEnv?: string;
@@ -126,6 +128,10 @@ export interface WorkerMigrationGate {
   databaseUrlEnv?: string;
 }
 
+export interface WorkerR2Gate {
+  recipe: "private-media";
+}
+
 export interface BrownfieldWorkerRequest {
   repository: string;
   environment?: InfrastructureEnvironment;
@@ -137,6 +143,7 @@ export interface BrownfieldWorkerRequest {
   runtimeSecrets?: Record<string, string>;
   generatedSecrets?: GeneratedWorkerSecret[];
   pagesProject?: string;
+  r2?: WorkerR2Gate;
   migration?: WorkerMigrationGate;
 }
 
@@ -173,6 +180,12 @@ export interface BrownfieldWorkerResult {
     profile: string | null;
     databaseUrlEnv: string | null;
     buildSecretConfigured: boolean;
+    buildCompleted: boolean;
+  };
+  r2: {
+    enabled: boolean;
+    recipe: "private-media" | null;
+    bucketName: string | null;
     buildCompleted: boolean;
   };
   release: {
@@ -453,6 +466,27 @@ function validateMigrationGate(
   return { recipe: "python-alembic", profile, databaseUrlEnv };
 }
 
+function r2DeployCommand(
+  baseDeployCommand: string,
+  repository: GitHubRepository,
+  gate: WorkerR2Gate | undefined
+): string {
+  if (!gate) return baseDeployCommand;
+  if (gate.recipe !== "private-media") {
+    throw new BrownfieldWorkerProvisioningError(
+      "R2_RECIPE_FORBIDDEN",
+      "Managed R2 must use the reviewed private-media recipe."
+    );
+  }
+
+  const bucketName = r2BucketName(repository.full_name);
+  const wrangler = "./node_modules/.bin/wrangler";
+  const ensureBucket =
+    `${wrangler} r2 bucket info ${bucketName} --json >/dev/null 2>&1 || ` +
+    `${wrangler} r2 bucket create ${bucketName} --storage-class Standard`;
+  return `${ensureBucket} && ${baseDeployCommand}`;
+}
+
 function migrationDeployCommand(
   baseDeployCommand: string,
   gate: ReturnType<typeof validateMigrationGate>
@@ -584,6 +618,21 @@ function validateRequest(
       "MIGRATION_RUNTIME_FORBIDDEN",
       "The python-alembic migration gate is not valid for the TypeScript/Wrangler runtime."
     );
+  }
+
+  if (input.r2) {
+    if (runtime !== "typescript-wrangler") {
+      throw new BrownfieldWorkerProvisioningError(
+        "R2_RUNTIME_FORBIDDEN",
+        "Managed R2 currently requires the reviewed TypeScript/Wrangler runtime."
+      );
+    }
+    if (input.r2.recipe !== "private-media") {
+      throw new BrownfieldWorkerProvisioningError(
+        "R2_RECIPE_FORBIDDEN",
+        "Managed R2 must use the reviewed private-media recipe."
+      );
+    }
   }
 
   const secretPrefix = databaseSecretPrefix(repository);
@@ -839,6 +888,37 @@ async function resolveBuildTokenUuid(env: Env): Promise<string> {
   }
 }
 
+async function resolveR2BuildTokenUuid(env: Env): Promise<string> {
+  assertCloudflareConfig(env);
+  let tokens: BuildToken[];
+  try {
+    tokens = await cloudflareRequest<BuildToken[]>(
+      env,
+      `/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/builds/tokens`
+    );
+  } catch (error) {
+    permissionError(error, "read Workers Builds tokens for R2", [
+      "Workers Builds Configuration Edit"
+    ]);
+  }
+
+  const preferredNames = [
+    "AppFactory R2 Builds",
+    "appfactory-api build token"
+  ];
+  for (const name of preferredNames) {
+    const match = tokens.find(
+      (token) => token.build_token_name === name && Boolean(token.build_token_uuid)
+    );
+    if (match?.build_token_uuid) return match.build_token_uuid;
+  }
+
+  throw new BrownfieldWorkerProvisioningError(
+    "R2_BUILD_TOKEN_REQUIRED",
+    "Managed R2 requires a registered Cloudflare Workers Builds token with R2 access."
+  );
+}
+
 async function ensureProductionTrigger(
   env: Env,
   worker: WorkerScript,
@@ -848,9 +928,10 @@ async function ensureProductionTrigger(
     rootDirectory: string;
     buildCommand: string;
     deployCommand: string;
+    buildTokenUuid?: string;
   }
 ): Promise<{ trigger: BuildTrigger; created: boolean }> {
-  const buildTokenUuid = await resolveBuildTokenUuid(env);
+  const buildTokenUuid = config.buildTokenUuid || await resolveBuildTokenUuid(env);
   const triggers = await listTriggers(env, worker.tag);
   const existing = triggers.find((trigger) =>
     trigger.repo_connection?.repo_connection_uuid === connection.repo_connection_uuid &&
@@ -1239,6 +1320,9 @@ export async function provisionBrownfieldWorker(
     ...(request.environment === "staging"
       ? { environment: request.environment }
       : {}),
+    ...(request.r2 ? {
+      r2Recipe: request.r2.recipe
+    } : {}),
     ...(request.migration ? {
       migrationRecipe: request.migration.recipe,
       migrationProfile: request.migration.profile,
@@ -1269,6 +1353,7 @@ export async function provisionBrownfieldWorker(
     (
       marker.buildCommand !== expectedMarker.buildCommand ||
       marker.deployCommand !== expectedMarker.deployCommand ||
+      marker.r2Recipe !== expectedMarker.r2Recipe ||
       marker.migrationRecipe !== expectedMarker.migrationRecipe ||
       marker.migrationProfile !== expectedMarker.migrationProfile ||
       marker.databaseUrlEnv !== expectedMarker.databaseUrlEnv
@@ -1335,7 +1420,11 @@ export async function provisionBrownfieldWorker(
   );
   const databaseRequired = preBuildHyperdrive.declared;
   const releaseDeployCommand = migrationDeployCommand(
-    hyperdriveDeployCommand(request.deployCommand, preBuildHyperdrive),
+    r2DeployCommand(
+      hyperdriveDeployCommand(request.deployCommand, preBuildHyperdrive),
+      repository,
+      request.r2
+    ),
     request.migration || null
   );
 
@@ -1345,6 +1434,9 @@ export async function provisionBrownfieldWorker(
     : request.deployCommand;
 
   const connection = await ensureRepositoryConnection(env, repository);
+  const r2BuildTokenUuid = request.r2
+    ? await resolveR2BuildTokenUuid(env)
+    : undefined;
   const { trigger, created: triggerCreated } = await ensureProductionTrigger(
     env,
     script,
@@ -1353,7 +1445,8 @@ export async function provisionBrownfieldWorker(
     {
       rootDirectory: request.rootDirectory,
       buildCommand: request.buildCommand,
-      deployCommand: triggerDeployCommand
+      deployCommand: triggerDeployCommand,
+      ...(r2BuildTokenUuid ? { buildTokenUuid: r2BuildTokenUuid } : {})
     }
   );
 
@@ -1390,7 +1483,7 @@ export async function provisionBrownfieldWorker(
     configCommitSha
   );
 
-  const completedBuild = request.migration || databaseRequired
+  const completedBuild = request.migration || databaseRequired || request.r2
     ? await waitForWorkerBuild(env, script.tag, build.build_uuid)
     : build;
 
@@ -1480,6 +1573,12 @@ export async function provisionBrownfieldWorker(
       databaseUrlEnv: request.migration?.databaseUrlEnv || null,
       buildSecretConfigured: migrationBuildSecretConfigured,
       buildCompleted: request.migration ? completedBuild.build_outcome === "success" : false
+    },
+    r2: {
+      enabled: Boolean(request.r2),
+      recipe: request.r2?.recipe || null,
+      bucketName: request.r2 ? r2BucketName(repository.full_name) : null,
+      buildCompleted: request.r2 ? completedBuild.build_outcome === "success" : false
     },
     release: {
       state: readiness.state,
