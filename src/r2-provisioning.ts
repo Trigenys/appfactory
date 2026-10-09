@@ -288,7 +288,9 @@ export async function provisionR2(
   env: Env,
   oidcRepository: string,
   request: R2ProvisioningRequest,
-  deps: R2Dependencies = { fetch }
+  deps: R2Dependencies = {
+    fetch: (input, init) => fetch(input, init)
+  }
 ): Promise<R2ProvisioningResult> {
   if (!request || typeof request !== "object") {
     throw new R2ProvisioningError(
