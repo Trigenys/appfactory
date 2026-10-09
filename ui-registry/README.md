@@ -82,3 +82,17 @@ The existing `uiProfile` provisioning path and `registry.json` files remain auth
 A reviewed approval must cite the exact upstream 40-character commit, pinned LICENSE/COPYING evidence, reviewed SPDX license, reviewer and mandatory notice file. `wow-security.mjs` exposes read-only status/eligibility checks and deterministic per-consumer provenance reconciliation; it never executes an installer or writes into a consumer repository.
 
 Run `npm run test:ui-registry` for both contract and security checks. See [the security and provenance runbook](../docs/wow-reuse-security.md) before proposing any change to `wow-review-policy.json`.
+
+## Agent workflow: WOW Frontend (#141)
+
+The portable [WOW Frontend SKILL.md](../skills/wow-frontend/SKILL.md) coordinates `audit → art direction → search before build → compose → intentional motion → render before done → provenance`. Its [README](../skills/wow-frontend/README.md) explains how to read or manually install the skill for a compatible agent.
+
+Read-only planning (no repository mutation or code import):
+
+```sh
+node scripts/wow-frontend-plan.mjs \
+  skills/wow-frontend/examples/commerce-factory.brief.json \
+  ui-registry/examples/wow-react-vite-css.json
+```
+
+The plan never claims screenshots, accessibility tests, builds or deployment have run. Keep the existing native registry and default-deny external source policy intact.
