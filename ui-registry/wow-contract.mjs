@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const ID = /^[a-z][a-z0-9-]{1,63}$/;
+const ID = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const TOKEN = /^[a-z][a-z0-9-]{0,47}$/;
 const KINDS = new Set(["mcp","component","block","guidelines"]);
 const RISKS = new Set(["low","medium","high"]);
