@@ -60,16 +60,22 @@ class CloudflareR2ApiError extends Error {
   }
 }
 
-function preferredResourceToken(env: Env): string {
-  const token = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
-  if (!token) {
+function resourceTokens(env: Env): string[] {
+  const tokens = [
+    env.CLOUDFLARE_R2_TOKEN,
+    env.CLOUDFLARE_PAGES_D1_TOKEN,
+    env.CLOUDFLARE_API_TOKEN
+  ].filter((token): token is string => Boolean(token));
+
+  const unique = [...new Set(tokens)];
+  if (unique.length === 0) {
     throw new R2ProvisioningError(
       "CLOUDFLARE_R2_TOKEN_REQUIRED",
       "R2 provisioning requires an AppFactory Cloudflare resource token.",
       ["Workers R2 Storage Edit"]
     );
   }
-  return token;
+  return unique;
 }
 
 function assertConfig(env: Env): asserts env is Env & {
@@ -81,7 +87,7 @@ function assertConfig(env: Env): asserts env is Env & {
       "R2 provisioning requires CLOUDFLARE_ACCOUNT_ID."
     );
   }
-  preferredResourceToken(env);
+  resourceTokens(env);
 }
 
 async function cloudflareRequestWithToken<T>(
@@ -140,32 +146,28 @@ async function cloudflareRequest<T>(
 ): Promise<T> {
   assertConfig(env);
 
-  const preferredToken = preferredResourceToken(env);
-  try {
-    return await cloudflareRequestWithToken<T>(
-      preferredToken,
-      deps,
-      path,
-      init
-    );
-  } catch (error) {
-    const fallbackToken = env.CLOUDFLARE_API_TOKEN;
-    const canRetryWithFallback =
-      error instanceof CloudflareR2ApiError &&
-      (error.status === 401 || error.status === 403) &&
-      Boolean(env.CLOUDFLARE_PAGES_D1_TOKEN) &&
-      Boolean(fallbackToken) &&
-      fallbackToken !== preferredToken;
+  const tokens = resourceTokens(env);
+  let lastError: unknown;
 
-    if (!canRetryWithFallback || !fallbackToken) throw error;
-
-    return cloudflareRequestWithToken<T>(
-      fallbackToken,
-      deps,
-      path,
-      init
-    );
+  for (let index = 0; index < tokens.length; index += 1) {
+    try {
+      return await cloudflareRequestWithToken<T>(
+        tokens[index],
+        deps,
+        path,
+        init
+      );
+    } catch (error) {
+      lastError = error;
+      const mayRetry =
+        error instanceof CloudflareR2ApiError &&
+        (error.status === 401 || error.status === 403) &&
+        index < tokens.length - 1;
+      if (!mayRetry) throw error;
+    }
   }
+
+  throw lastError;
 }
 
 function mapCloudflareError(error: unknown, operation: string): never {

@@ -77,6 +77,12 @@ Required AppFactory Cloudflare permission:
 
 - `Workers R2 Storage Edit`.
 
+Preferred secret:
+
+- `CLOUDFLARE_R2_TOKEN`: a dedicated least-privilege token scoped to the AppFactory account with `Workers R2 Storage Edit`.
+
+For backward compatibility, AppFactory can fall back to the existing resource tokens only when the preferred token is missing or Cloudflare returns 401/403. The dedicated token is recommended so adding R2 does not widen Pages/D1 or general Worker credentials.
+
 Permission errors return only the permission requirement; Cloudflare token values are never returned or logged.
 
 ## First consumer
