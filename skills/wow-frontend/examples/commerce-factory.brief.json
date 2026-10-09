@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "project": "Trigenys Commerce Factory",
+  "repository": "Trigenys/trigenys-commerce-factory",
+  "audience": "Camerounian merchants selling products via a catalog and WhatsApp",
+  "primaryConversion": "Open merchant onboarding /app",
+  "artDirection": "Distinctive product-first commerce with real store visuals, warm accents and purposeful transitions",
+  "narrative": [
+    "Show recognizable product imagery",
+    "Demonstrate the catalog/storefront presentation",
+    "Connect a chosen product to a WhatsApp conversation",
+    "Explain what merchants can do next"
+  ],
+  "constraints": {
+    "preserveStack": true,
+    "languages": [
+      "fr",
+      "en"
+    ],
+    "assets": "self-hosted",
+    "merchants": "fictional-demo-only-unless-approved",
+    "truthfulProofOnly": true,
+    "reducedMotion": true
+  },
+  "notes": "Based on a read-only inspection of Commerce Factory README, package.json, src/App.tsx and src/styles.css. No product changes or browser QA performed."
+}
