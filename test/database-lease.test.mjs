@@ -9,30 +9,40 @@ const leaseSource=fs.readFileSync("src/database-lease.ts","utf8");
 const types=fs.readFileSync("src/types.ts","utf8");
 const js=ts.transpileModule(leaseSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {issueDatabaseLease}=await import("data:text/javascript;base64,"+Buffer.from(js).toString("base64"));
-const claims={repository:"Trigenys/trigenys-seo-monitor"};
-const goodUrl="postgresql://seo_monitor_owner:test-not-a-real-password@ep-demo.c-6.eu-central-1.aws.neon.tech:5432/seo_monitor?sslmode=require";
-const env={APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL:goodUrl};
-const request={repository:claims.repository};
 
-test("OIDC database lease trust is pinned to canonical SEO Monitor workflow, main and full events",()=>{
+const seoClaims={repository:"Trigenys/trigenys-seo-monitor"};
+const seoUrl="postgresql://seo_monitor_owner:test-not-a-real-password@ep-demo.c-6.eu-central-1.aws.neon.tech:5432/seo_monitor?sslmode=require";
+const seoEnv={APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL:seoUrl};
+const seoRequest={repository:seoClaims.repository};
+
+const editorialClaims={repository:"Trigenys/trigenys-editorial-os"};
+const editorialUrl="postgresql://editorial_os_staging:test-not-a-real-password@ep-demo.c-6.eu-central-1.aws.neon.tech:5432/editorial_os_staging?sslmode=require";
+const editorialEnv={HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING:editorialUrl};
+const editorialRequest={repository:editorialClaims.repository};
+
+test("OIDC database lease trust is pinned to approved collector workflows on main and full events",()=>{
   assert.match(auth,/authenticateDatabaseLease/);
   assert.match(auth,/verifyOidcToken\(request, env\)/);
   assert.match(auth,/Trigenys\/trigenys-seo-monitor/);
   assert.match(auth,/\.github\/workflows\/seo-monitor\.yml@/);
+  assert.match(auth,/Trigenys\/trigenys-editorial-os/);
+  assert.match(auth,/\.github\/workflows\/news-scout\.yml@/);
   assert.match(auth,/claims\.workflow_ref !== allowedWorkflow/);
   assert.match(auth,/claims\.event_name !== "schedule" && claims\.event_name !== "workflow_dispatch"/);
 });
 
 test("only exact repository requests allowed and arbitrary profile selectors rejected",()=>{
-  assert.throws(()=>issueDatabaseLease(env,{repository:"Trigenys/other"},request),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
-  assert.throws(()=>issueDatabaseLease(env,claims,{repository:"Trigenys/other"}),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
-  assert.throws(()=>issueDatabaseLease(env,claims,{...request,profile:"product-identity-production"}),e=>e.code==="DATABASE_LEASE_FIELDS_FORBIDDEN");
-  assert.throws(()=>issueDatabaseLease(env,claims,{...request,database:"product_identity"}),e=>e.code==="DATABASE_LEASE_FIELDS_FORBIDDEN");
-  assert.throws(()=>issueDatabaseLease(env,claims,{}),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
+  assert.throws(()=>issueDatabaseLease(seoEnv,{repository:"Trigenys/other"},seoRequest),e=>e.code==="DATABASE_LEASE_REPOSITORY_FORBIDDEN");
+  assert.throws(()=>issueDatabaseLease(seoEnv,seoClaims,{repository:"Trigenys/other"}),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
+  assert.throws(()=>issueDatabaseLease(seoEnv,seoClaims,{...seoRequest,profile:"product-identity-production"}),e=>e.code==="DATABASE_LEASE_FIELDS_FORBIDDEN");
+  assert.throws(()=>issueDatabaseLease(editorialEnv,editorialClaims,{...editorialRequest,database:"seo_monitor"}),e=>e.code==="DATABASE_LEASE_FIELDS_FORBIDDEN");
+  assert.throws(()=>issueDatabaseLease(editorialEnv,seoClaims,editorialRequest),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
 });
 
-test("missing or incorrect private Neon profile fails closed without leaking credentials",()=>{
-  assert.throws(()=>issueDatabaseLease({},claims,request),e=>e.code==="DATABASE_LEASE_NOT_CONFIGURED"&&!e.message.includes("test-not-a-real-password"));
+test("missing or incorrect private Neon profiles fail closed without leaking credentials",()=>{
+  assert.throws(()=>issueDatabaseLease({},seoClaims,seoRequest),e=>e.code==="DATABASE_LEASE_NOT_CONFIGURED"&&!e.message.includes("test-not-a-real-password"));
+  assert.throws(()=>issueDatabaseLease({},editorialClaims,editorialRequest),e=>e.code==="DATABASE_LEASE_NOT_CONFIGURED"&&!e.message.includes("test-not-a-real-password"));
+
   for(const badUrl of [
     "postgresql://seo_monitor_owner:demo@server.example.org:5432/seo_monitor",
     "postgresql://neondb_owner:demo@ep-demo.neon.tech:5432/seo_monitor",
@@ -40,17 +50,33 @@ test("missing or incorrect private Neon profile fails closed without leaking cre
     "https://seo_monitor_owner:demo@ep-demo.neon.tech/seo_monitor",
     "postgresql://seo_monitor_owner@ep-demo.neon.tech:5432/seo_monitor"
   ]){
-    assert.throws(()=>issueDatabaseLease({APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL:badUrl},claims,request),e=>e.code==="DATABASE_LEASE_INVALID_PROFILE"&&!e.message.includes("demo"));
+    assert.throws(()=>issueDatabaseLease({APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL:badUrl},seoClaims,seoRequest),e=>e.code==="DATABASE_LEASE_INVALID_PROFILE"&&!e.message.includes("demo"));
+  }
+
+  for(const badUrl of [
+    "postgresql://editorial_os_staging:demo@server.example.org:5432/editorial_os_staging",
+    "postgresql://other_role:demo@ep-demo.neon.tech:5432/editorial_os_staging",
+    "postgresql://editorial_os_staging:demo@ep-demo.neon.tech:5432/seo_monitor",
+    "https://editorial_os_staging:demo@ep-demo.neon.tech/editorial_os_staging"
+  ]){
+    assert.throws(()=>issueDatabaseLease({HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING:badUrl},editorialClaims,editorialRequest),e=>e.code==="DATABASE_LEASE_INVALID_PROFILE"&&!e.message.includes("demo"));
   }
 });
 
-test("valid lease returns only intended db and strips dangerous pg SSL overrides",()=>{
-  const lease=issueDatabaseLease(env,claims,request);
-  assert.equal(lease.status,"READY");
-  assert.equal(lease.repository,claims.repository);
-  assert.equal(lease.database,"seo_monitor");
-  assert.equal(lease.databaseUrl.includes("sslmode="),false);
-  assert.equal(lease.databaseUrl.startsWith("postgresql://seo_monitor_owner:"),true);
+test("valid leases return only intended db and strip dangerous pg SSL overrides",()=>{
+  const seoLease=issueDatabaseLease(seoEnv,seoClaims,seoRequest);
+  assert.equal(seoLease.status,"READY");
+  assert.equal(seoLease.repository,seoClaims.repository);
+  assert.equal(seoLease.database,"seo_monitor");
+  assert.equal(seoLease.databaseUrl.includes("sslmode="),false);
+  assert.equal(seoLease.databaseUrl.startsWith("postgresql://seo_monitor_owner:"),true);
+
+  const editorialLease=issueDatabaseLease(editorialEnv,editorialClaims,editorialRequest);
+  assert.equal(editorialLease.status,"READY");
+  assert.equal(editorialLease.repository,editorialClaims.repository);
+  assert.equal(editorialLease.database,"editorial_os_staging");
+  assert.equal(editorialLease.databaseUrl.includes("sslmode="),false);
+  assert.equal(editorialLease.databaseUrl.startsWith("postgresql://editorial_os_staging:"),true);
 });
 
 test("router uses OIDC, noncacheable response and sanitized errors",()=>{
@@ -59,6 +85,7 @@ test("router uses OIDC, noncacheable response and sanitized errors",()=>{
   assert.match(router,/issueDatabaseLease\(env, claims, body\)/);
   assert.match(router,/"cache-control": "no-store, private"/);
   assert.match(types,/APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL\?: string/);
+  assert.match(types,/HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING\?: string/);
   assert.doesNotMatch(router,/console\.log\(.*databaseUrl/);
   assert.doesNotMatch(leaseSource,/console\.(?:log|warn|error)/);
 });
