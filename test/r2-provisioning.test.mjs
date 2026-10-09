@@ -70,3 +70,9 @@ test("R2 prefers a dedicated token and can fall back on auth failures", () => {
   assert.match(source, /error\.status === 401 \|\| error\.status === 403/);
   assert.match(source, /index < tokens\.length - 1/);
 });
+
+
+test("R2 authorization errors preserve safe provider detail for diagnosis", () => {
+  assert.match(source, /error\.detail\.slice\(0, 240\)/);
+  assert.match(source, /HTTP \$\{error\.status\}/);
+});
