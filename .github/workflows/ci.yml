@@ -119,6 +119,8 @@ jobs:
         run: npm run test:neon-provisioning
       - name: Validate TypeScript/Wrangler Worker runtime
         run: npm run test:typescript-worker-runtime
+      - name: Validate reusable R2 provisioning
+        run: npm run test:r2-provisioning
       - name: Validate infrastructure environment isolation
         run: npm run test:infrastructure-environments
       - name: Validate Worker migration release gate
