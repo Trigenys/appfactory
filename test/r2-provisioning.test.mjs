@@ -50,3 +50,11 @@ test("OIDC infrastructure router exposes reusable R2 provisioning", () => {
   assert.match(index, /provisionExistingR2/);
   assert.match(index, /provisionR2/);
 });
+
+
+test("default R2 fetch preserves the Cloudflare Worker runtime binding", () => {
+  assert.match(
+    source,
+    /deps: R2Dependencies = \{[\s\S]*fetch: \(input, init\) => fetch\(input, init\)[\s\S]*\}/
+  );
+});
