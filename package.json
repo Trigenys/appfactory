@@ -24,6 +24,7 @@
     "test:database-lease": "node --test test/database-lease.test.mjs",
     "test:neon-provisioning": "node --test test/neon-provisioning.test.mjs",
     "test:typescript-worker-runtime": "node --test test/typescript-worker-runtime.test.mjs",
+    "test:r2-provisioning": "node --test test/r2-provisioning.test.mjs",
     "test:ui-registry": "node --test test/ui-registry.test.mjs"
   },
   "devDependencies": {
