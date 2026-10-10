@@ -61,6 +61,9 @@ test("dry run uses real Commerce Factory planning fixture but does not mutate so
   assert.ok(output.steps.length >= 8);
   assert.ok(output.steps.every((x) => x.status === "NOT RUN"));
   assert.equal(output.sources.length,consumer.sources.allow.length);
+  assert.equal(output.adapterResolutions.length,consumer.sources.allow.length);
+  assert.ok(output.adapterResolutions.every((x) => x.actions.installAutomatically === false));
+  assert.ok(output.adapterResolutions.every((x) => x.actions.executeRemote === false));
   for (const source of output.sources) {
     assert.equal(source.mode,"reference-only");
     assert.equal(source.installAllowed,false);
