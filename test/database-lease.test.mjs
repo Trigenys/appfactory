@@ -9,6 +9,8 @@ const leaseSource=fs.readFileSync("src/database-lease.ts","utf8");
 const types=fs.readFileSync("src/types.ts","utf8");
 const js=ts.transpileModule(leaseSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {issueDatabaseLease}=await import("data:text/javascript;base64,"+Buffer.from(js).toString("base64"));
+const authJs=ts.transpileModule(auth,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const {authorizeDatabaseLeaseClaims}=await import("data:text/javascript;base64,"+Buffer.from(authJs).toString("base64"));
 
 const seoClaims={repository:"Trigenys/trigenys-seo-monitor"};
 const seoUrl="postgresql://seo_monitor_owner:test-not-a-real-password@ep-demo.c-6.eu-central-1.aws.neon.tech:5432/seo_monitor?sslmode=require";
@@ -27,11 +29,54 @@ test("OIDC database lease trust is pinned to approved collector workflows on mai
   assert.match(auth,/\.github\/workflows\/seo-monitor\.yml@/);
   assert.match(auth,/Trigenys\/trigenys-editorial-os/);
   assert.match(auth,/\.github\/workflows\/news-scout\.yml@/);
-  assert.match(auth,/claims\.workflow_ref !== allowedWorkflow/);
+  assert.match(auth,/\.github\/workflows\/mukuru-editorial-pilot\.yml@/);
+  assert.match(auth,/authorizeDatabaseLeaseClaims/);
+  assert.match(auth,/item\.workflow === claims\.workflow_ref/);
   assert.match(auth,/claims\.event_name === "schedule"/);
   assert.match(auth,/claims\.event_name === "workflow_dispatch"/);
-  assert.match(auth,/repository === "Trigenys\/trigenys-editorial-os"/);
+  assert.match(auth,/events: \["push", "workflow_dispatch"\]/);
   assert.match(auth,/claims\.event_name === "push"/);
+});
+
+test("Mukuru staging OIDC identity accepts only its canonical workflow on main",()=>{
+  const ref="refs/heads/main";
+  const news="Trigenys/trigenys-editorial-os/.github/workflows/news-scout.yml@"+ref;
+  const pilot="Trigenys/trigenys-editorial-os/.github/workflows/mukuru-editorial-pilot.yml@"+ref;
+  const seo="Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@"+ref;
+  const base={iss:"fixture",aud:"appfactory-api",exp:9999999999,repository:"Trigenys/trigenys-editorial-os",ref};
+  for(const event_name of ["push","workflow_dispatch"]){
+    assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:pilot,event_name},ref));
+  }
+  for(const event_name of ["push","schedule","workflow_dispatch"]){
+    assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:news,event_name},ref));
+  }
+  assert.throws(
+    ()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:pilot,event_name:"schedule"},ref),
+    error=>error.code==="DATABASE_LEASE_EVENT_FORBIDDEN"
+  );
+  for(const workflow_ref of [
+    "Trigenys/trigenys-editorial-os/.github/workflows/random.yml@"+ref,
+    pilot.replace("@refs/heads/main","@refs/heads/dev"),
+    "Trigenys/other/.github/workflows/mukuru-editorial-pilot.yml@"+ref
+  ]){
+    assert.throws(
+      ()=>authorizeDatabaseLeaseClaims({...base,workflow_ref,event_name:"push"},ref),
+      error=>error.code==="DATABASE_LEASE_CALLER_FORBIDDEN"
+    );
+  }
+  assert.throws(
+    ()=>authorizeDatabaseLeaseClaims({...base,repository:"Trigenys/other",workflow_ref:pilot,event_name:"push"},ref),
+    error=>error.code==="DATABASE_LEASE_CALLER_FORBIDDEN"
+  );
+  assert.throws(
+    ()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:seo,event_name:"push"},ref),
+    error=>error.code==="DATABASE_LEASE_CALLER_FORBIDDEN"
+  );
+  assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims({...base,repository:"Trigenys/trigenys-seo-monitor",workflow_ref:seo,event_name:"schedule"},ref));
+  assert.throws(
+    ()=>authorizeDatabaseLeaseClaims({...base,repository:"Trigenys/trigenys-seo-monitor",workflow_ref:seo,event_name:"push"},ref),
+    error=>error.code==="DATABASE_LEASE_EVENT_FORBIDDEN"
+  );
 });
 
 test("only exact repository requests allowed and arbitrary profile selectors rejected",()=>{
