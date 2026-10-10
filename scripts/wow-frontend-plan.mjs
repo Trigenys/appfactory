@@ -6,6 +6,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { previewWowSources, readWowRegistry } from "../ui-registry/wow-contract.mjs";
 import { validateWowReviewPolicy, wowSourceDisposition } from "../ui-registry/wow-security.mjs";
+import { readWowAdapters, resolveWowAdapters } from "../ui-registry/wow-resolver.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const POLICY_PATH = path.join(ROOT, "ui-registry", "wow-review-policy.json");
@@ -69,17 +70,19 @@ const phases = [
   {id:"provenance",action:"Verify licenses/notices and record adopted code only under future central approvals",status:"NOT RUN"}
 ];
 
-export function planWowFrontend({brief,consumer,inventory,policy}) {
+export function planWowFrontend({brief,consumer,inventory,policy,adapters = readWowAdapters()}) {
   const errors = [
     ...validateWowBrief(brief),
     ...validateWowReviewPolicy(policy,inventory)
   ];
   const sources = previewWowSources(consumer,inventory);
   if (!sources.ok) errors.push(...sources.errors.map((e) => "consumer/source: " + e));
-  if (errors.length) return {ok:false,mode:"DRY_RUN",errors,steps:[],sources:[],evidence:{}};
+  const resolution = resolveWowAdapters({consumer,inventory,policy,adapters});
+  if (!resolution.ok) errors.push(...resolution.errors.map((e) => "adapter resolution: " + e));
+  if (errors.length) return {ok:false,mode:"DRY_RUN",errors,steps:[],sources:[],adapterResolutions:[],evidence:{},operationsAllowed:false};
   if (!consumer.enabled) {
     return {ok:true,mode:"DRY_RUN",status:"DISABLED",project:brief.project,
-      repository:brief.repository,steps:[],sources:[],evidence:{},operationsAllowed:false};
+      repository:brief.repository,steps:[],sources:[],adapterResolutions:[],evidence:{},operationsAllowed:false};
   }
   const candidates = sources.sources.map((candidate) => ({
     ...candidate,
@@ -99,6 +102,7 @@ export function planWowFrontend({brief,consumer,inventory,policy}) {
     unchangedStack:{...consumer.stack},
     languages:[...brief.constraints.languages],
     sources:candidates,
+    adapterResolutions:resolution.sources,
     steps:phases.map((phase) => ({...phase})),
     guardrails:{
       preserveStack:true,truthfulProofOnly:true,reducedMotionRequired:true,

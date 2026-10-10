@@ -20,6 +20,18 @@ node scripts/wow-frontend-plan.mjs skills/wow-frontend/examples/commerce-factory
 
 A plan is **read-only** and uses repository-pinned metadata; it does not crawl GitHub or produce code. Invalid source IDs, permissions, malformed configs and unknown fields must fail closed. Treat the result as a candidate list for further review, never as a tested compatibility guarantee.
 
+## Adapter/stack resolver (#142)
+
+Use `ui-registry/wow-adapters.json` and `resolveWowAdapters()` in `ui-registry/wow-resolver.mjs` **after** verifying the source inventory, central policy and consumer config. The existing planning CLI includes an `adapterResolutions` section.
+
+- `technicalFit: native` means frameworks/styling appear compatible; `technicalFit: adapt` signals styling translation in the **current** framework; neither grants permission.
+- `decision: reference-only` denies copying/installing even if the stack technically matches.
+- `decision: unsupported` blocks a source under policy or invalid metadata.
+- `interfaceKind` distinguishes component patterns, registry blocks, optional external tools and guidance.
+- `runtime.hints` are **unverified possible per-component runtimes**, not mandatory packages. Reuse existing libraries when appropriate; never add duplicates or install automatically.
+
+The resolver does not invoke MagicPath, Figma, 21st.dev, any hosted plugin or any shell command. See `docs/wow-source-adapters.md` for exact contracts.
+
 ## Distinguish status from technical fit
 
 - `blocked`: unknown, explicitly denied or policy invalid; do not use.

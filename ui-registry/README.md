@@ -83,6 +83,12 @@ A reviewed approval must cite the exact upstream 40-character commit, pinned LIC
 
 Run `npm run test:ui-registry` for both contract and security checks. See [the security and provenance runbook](../docs/wow-reuse-security.md) before proposing any change to `wow-review-policy.json`.
 
+## Source adapter compatibility (#142)
+
+The [adapter registry](wow-adapters.json) is a **metadata companion** to `wow-sources.json`, not another installable component registry. The [pure resolver](wow-resolver.mjs) joins the existing source inventory, review policy and consumer contract to report `native`, `adapt`, `reference-only` or `unsupported`, while keeping external service calls, installs and copy operations **disabled**.
+
+The [read-only planner](../scripts/wow-frontend-plan.mjs) now reports `adapterResolutions` for the selected sources. See [adapter documentation](../docs/wow-source-adapters.md). Runtimes such as Motion, GSAP and Three.js are only **possible dependency hints**, not package install instructions.
+
 ## Agent workflow: WOW Frontend (#141)
 
 The portable [WOW Frontend SKILL.md](../skills/wow-frontend/SKILL.md) coordinates `audit → art direction → search before build → compose → intentional motion → render before done → provenance`. Its [README](../skills/wow-frontend/README.md) explains how to read or manually install the skill for a compatible agent.

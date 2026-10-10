@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "description": "Conservative, offline integration hints keyed to the existing external WOW source inventory. Not a second component registry and not executable install definitions.",
+  "adapters": [
+    {
+      "sourceId": "21st-magic-mcp",
+      "interfaceKind": "external-tool",
+      "optionalService": true,
+      "motionHints": [
+        "none"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Optional MCP component discovery. No connection or code execution required."
+    },
+    {
+      "sourceId": "magic-ui",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "React/Tailwind design pattern reference; inspect individual component dependencies before adoption."
+    },
+    {
+      "sourceId": "ui-layouts",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Effects may need Motion or Three; per-component compatibility must be reviewed."
+    },
+    {
+      "sourceId": "tailark",
+      "interfaceKind": "registry-block",
+      "optionalService": false,
+      "motionHints": [
+        "none"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "shadcn/Tailwind marketing blocks; registry install requires consumer stack compatibility and a specific approval."
+    },
+    {
+      "sourceId": "beui",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "React Motion examples; prefer an already present runtime."
+    },
+    {
+      "sourceId": "web-interface-guidelines",
+      "interfaceKind": "guidance",
+      "optionalService": false,
+      "motionHints": [
+        "none"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "UI guidance only, never executable or copyable component code."
+    },
+    {
+      "sourceId": "react-bits",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Animated React examples; upstream license status unverified."
+    },
+    {
+      "sourceId": "animate-ui",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Animated UI examples; upstream license status unverified."
+    },
+    {
+      "sourceId": "motion-primitives-website",
+      "interfaceKind": "component-pattern",
+      "optionalService": false,
+      "motionHints": [
+        "motion",
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Motion/GSAP/Three references; upstream license status unverified."
+    }
+  ]
+}
