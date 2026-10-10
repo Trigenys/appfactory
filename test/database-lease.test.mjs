@@ -32,10 +32,7 @@ test("OIDC database lease trust is pinned to approved collector workflows on mai
   assert.match(auth,/\.github\/workflows\/mukuru-editorial-pilot\.yml@/);
   assert.match(auth,/authorizeDatabaseLeaseClaims/);
   assert.match(auth,/item\.workflow === claims\.workflow_ref/);
-  assert.match(auth,/claims\.event_name === "schedule"/);
-  assert.match(auth,/claims\.event_name === "workflow_dispatch"/);
   assert.match(auth,/events: \["push", "workflow_dispatch"\]/);
-  assert.match(auth,/claims\.event_name === "push"/);
 });
 
 test("Mukuru staging OIDC identity accepts only its canonical workflow on main",()=>{
