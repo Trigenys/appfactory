@@ -1,3 +1,4 @@
+import "./wow-frontend-adapters.test.mjs";
 import "./wow-frontend-skill.test.mjs";
 import "./wow-frontend-security.test.mjs";
 import "./wow-frontend-contract.test.mjs";
