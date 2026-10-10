@@ -298,40 +298,64 @@ export async function authenticateInfrastructureMutation(
  * only explicitly approved collector workflows on protected main may request
  * their own database lease. Cross-repository credential selection is forbidden.
  */
-export async function authenticateDatabaseLease(
-  request: Request,
-  env: Env
-): Promise<GitHubOidcClaims> {
-  const { claims, expectedRef } = await verifyOidcToken(request, env);
-  const approvedWorkflows: Record<string, string> = {
-    "Trigenys/trigenys-seo-monitor":
-      `Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@${expectedRef}`,
-    "Trigenys/trigenys-editorial-os":
-      `Trigenys/trigenys-editorial-os/.github/workflows/news-scout.yml@${expectedRef}`
+interface ApprovedDatabaseLeaseCaller {
+  workflow: string;
+  events: readonly string[];
+}
+
+/**
+ * An OIDC identity is scoped to an exact workflow file, main ref and event.
+ * Mukuru is a bounded staging editorial pilot; it cannot select a DB profile.
+ * This pure authorizer is tested against both allowed and denied identities.
+ */
+export function authorizeDatabaseLeaseClaims(
+  claims: GitHubOidcClaims,
+  expectedRef: string
+): void {
+  const approvedWorkflows: Record<string, ApprovedDatabaseLeaseCaller[]> = {
+    "Trigenys/trigenys-seo-monitor": [
+      {
+        workflow: `Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@${expectedRef}`,
+        events: ["schedule", "workflow_dispatch"]
+      }
+    ],
+    "Trigenys/trigenys-editorial-os": [
+      {
+        workflow: `Trigenys/trigenys-editorial-os/.github/workflows/news-scout.yml@${expectedRef}`,
+        events: ["schedule", "workflow_dispatch", "push"]
+      },
+      {
+        workflow: `Trigenys/trigenys-editorial-os/.github/workflows/mukuru-editorial-pilot.yml@${expectedRef}`,
+        events: ["push", "workflow_dispatch"]
+      }
+    ]
   };
   const repository = claims.repository || "";
-  const allowedWorkflow = approvedWorkflows[repository];
-  if (!allowedWorkflow || claims.workflow_ref !== allowedWorkflow) {
+  const allowedWorkflow = (approvedWorkflows[repository] || []).find(
+    (item) => item.workflow === claims.workflow_ref
+  );
+  if (!allowedWorkflow) {
     throw new AuthenticationError(
       403,
       "DATABASE_LEASE_CALLER_FORBIDDEN",
       "Database access is restricted to approved collector workflows on main."
     );
   }
-  const eventAllowed =
-    claims.event_name === "schedule" ||
-    claims.event_name === "workflow_dispatch" ||
-    (
-      repository === "Trigenys/trigenys-editorial-os" &&
-      claims.event_name === "push"
-    );
-  if (!eventAllowed) {
+  if (!claims.event_name || !allowedWorkflow.events.includes(claims.event_name)) {
     throw new AuthenticationError(
       403,
       "DATABASE_LEASE_EVENT_FORBIDDEN",
       "Database lease event is not allowed for this collector."
     );
   }
+}
+
+export async function authenticateDatabaseLease(
+  request: Request,
+  env: Env
+): Promise<GitHubOidcClaims> {
+  const { claims, expectedRef } = await verifyOidcToken(request, env);
+  authorizeDatabaseLeaseClaims(claims, expectedRef);
   return claims;
 }
 
