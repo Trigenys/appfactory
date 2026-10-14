@@ -26,7 +26,10 @@ export class SeoGitHubBroker extends WorkerEntrypoint<Env> {
         signal: AbortSignal.timeout(15000)
       }
     );
-    if (!response.ok) throw new Error(`SEO_INSTALLATION_TOKEN_HTTP_${response.status}`);
+    if (!response.ok) {
+      const details = await response.json() as {message?: string};
+      throw new Error(`SEO_INSTALLATION_TOKEN_HTTP_${response.status}: ${details.message || 'Unavailable'}`);
+    }
     const data = await response.json() as { token: string };
     return data.token;
   }
