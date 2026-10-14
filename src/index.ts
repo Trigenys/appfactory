@@ -1304,3 +1304,5 @@ export default {
     return json({ error: "NOT_FOUND" }, 404);
   }
 };
+
+export { SeoGitHubBroker } from "./seo-github-broker";

@@ -134,3 +134,31 @@ test("router uses OIDC, noncacheable response and sanitized errors",()=>{
   assert.doesNotMatch(router,/console\.log\(.*databaseUrl/);
   assert.doesNotMatch(leaseSource,/console\.(?:log|warn|error)/);
 });
+
+test("SEO broker restricts the repository and uses a bounded permission fallback",async()=>{
+  const source=fs.readFileSync("src/seo-github-broker.ts","utf8")
+    .replace(/import \{ WorkerEntrypoint \} from "cloudflare:workers";/,'class WorkerEntrypoint { constructor(env){this.env=env;} }')
+    .replace(/import \{ createGitHubAppJwt \} from "\.\/github";/,'const createGitHubAppJwt=async()=>"fixture-jwt";');
+  const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+  const {SeoGitHubBroker}=await import("data:text/javascript;base64,"+Buffer.from(js).toString("base64"));
+  const previous=globalThis.fetch;
+  const calls=[];
+  try{
+    globalThis.fetch=async(url,init)=>{
+      calls.push({url,body:JSON.parse(init.body)});
+      return calls.length===1 ? Response.json({message:"Permissions unavailable"},{status:422}) : Response.json({token:"fixture-token"},{status:201});
+    };
+    const broker=new SeoGitHubBroker({GITHUB_INSTALLATION_ID:"fixture-installation"});
+    assert.equal(await broker.seoInstallationToken(),"fixture-token");
+    assert.equal(calls.length,2);
+    for(const call of calls)assert.deepEqual(call.body.repositories,["trigenys-seo-monitor"]);
+    assert.deepEqual(calls.map(c=>c.body.permissions),[{actions:"write",contents:"read"},{actions:"read",contents:"write"}]);
+  }finally{globalThis.fetch=previous;}
+});
+
+test("SEO repository dispatch lease is pinned to its original collector workflow",()=>{
+  const ref="refs/heads/main";
+  const claims={iss:"fixture",aud:"appfactory-api",exp:9999999999,repository:"Trigenys/trigenys-seo-monitor",ref,workflow_ref:"Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@"+ref,event_name:"repository_dispatch"};
+  assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims(claims,ref));
+  assert.throws(()=>authorizeDatabaseLeaseClaims({...claims,workflow_ref:"Trigenys/trigenys-seo-monitor/.github/workflows/other.yml@"+ref},ref));
+});
