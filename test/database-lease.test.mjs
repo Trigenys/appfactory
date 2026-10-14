@@ -155,3 +155,10 @@ test("SEO broker restricts the repository and uses a bounded permission fallback
     assert.deepEqual(calls.map(c=>c.body.permissions),[{actions:"write",contents:"read"},{actions:"read",contents:"write"}]);
   }finally{globalThis.fetch=previous;}
 });
+
+test("SEO repository dispatch lease is pinned to its original collector workflow",()=>{
+  const ref="refs/heads/main";
+  const claims={iss:"fixture",aud:"appfactory-api",exp:9999999999,repository:"Trigenys/trigenys-seo-monitor",ref,workflow_ref:"Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@"+ref,event_name:"repository_dispatch"};
+  assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims(claims,ref));
+  assert.throws(()=>authorizeDatabaseLeaseClaims({...claims,workflow_ref:"Trigenys/trigenys-seo-monitor/.github/workflows/other.yml@"+ref},ref));
+});

@@ -1,7 +1,7 @@
 # SEO GitHub broker
 
-`SeoGitHubBroker` is an internal named Worker RPC entrypoint. SEO Monitor binds to `appfactory-api` with this entrypoint and invokes `seoInstallationToken()`.
+Internal named RPC entrypoint `SeoGitHubBroker` provides `seoInstallationToken()`. It reuses AppFactory's identity without exposing or copying its private key. The repository is fixed to `trigenys-seo-monitor`.
 
-The broker reuses AppFactory's configured GitHub App identity and issues a short-lived installation token restricted to `trigenys-seo-monitor`, Actions write and Contents read. Callers cannot select a repository or permissions. There is no new public HTTP endpoint, no secret extraction, and no need to copy the private key to SEO Monitor.
+The broker first requests Actions write / Contents read. If GitHub definitively rejects that permission set (422), it requests Actions read / Contents write, then Contents write alone. The API can use repository dispatch when workflow dispatch is forbidden. No network, authentication or other error causes a wider retry. Callers cannot supply repositories or scopes.
 
-Existing default HTTP routes are unchanged. During bootstrap, the exact deployed module was retained and the named export appended, with a deployment-head check to avoid replacing concurrent changes. This source export makes subsequent regular builds preserve the capability.
+Database leases for repository dispatch are restricted to the existing `seo-monitor.yml` workflow on main, alongside its existing scheduled/manual events. Default AppFactory HTTP routes are unchanged.

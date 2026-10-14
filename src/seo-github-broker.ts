@@ -9,7 +9,8 @@ export class SeoGitHubBroker extends WorkerEntrypoint<Env> {
     const jwt = await createGitHubAppJwt(this.env);
     const scopes = [
       { actions: "write", contents: "read" },
-      { actions: "read", contents: "write" }
+      { actions: "read", contents: "write" },
+      { contents: "write" }
     ];
     for (let index = 0; index < scopes.length; index++) {
       const response = await fetch(
@@ -28,7 +29,7 @@ export class SeoGitHubBroker extends WorkerEntrypoint<Env> {
           signal: AbortSignal.timeout(15000)
         }
       );
-      if (response.status === 422 && index === 0) continue;
+      if (response.status === 422 && index < scopes.length - 1) continue;
       if (!response.ok) {
         const details = await response.json() as {message?: string};
         throw new Error(`SEO_INSTALLATION_TOKEN_HTTP_${response.status}: ${details.message || "Unavailable"}`);

@@ -316,7 +316,7 @@ export function authorizeDatabaseLeaseClaims(
     "Trigenys/trigenys-seo-monitor": [
       {
         workflow: `Trigenys/trigenys-seo-monitor/.github/workflows/seo-monitor.yml@${expectedRef}`,
-        events: ["schedule", "workflow_dispatch"]
+        events: ["schedule", "workflow_dispatch", "repository_dispatch"]
       }
     ],
     "Trigenys/trigenys-editorial-os": [
