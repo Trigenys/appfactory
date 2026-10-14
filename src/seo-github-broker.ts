@@ -39,4 +39,15 @@ export class SeoGitHubBroker extends WorkerEntrypoint<Env> {
     }
     throw new Error("SEO_INSTALLATION_TOKEN_UNAVAILABLE");
   }
+
+  async seoInstallationCapabilities(): Promise<unknown> {
+    const jwt = await createGitHubAppJwt(this.env);
+    const response = await fetch(
+      `https://api.github.com/app/installations/${this.env.GITHUB_INSTALLATION_ID}`,
+      {headers:{Authorization:`Bearer ${jwt}`,Accept:"application/vnd.github+json","User-Agent":"Trigenys-SEO-Monitor"},redirect:"manual",signal:AbortSignal.timeout(15000)}
+    );
+    if(!response.ok) throw new Error(`SEO_INSTALLATION_STATUS_HTTP_${response.status}`);
+    const data = await response.json() as {app_id:number;app_slug:string;html_url:string;account:{login:string};permissions:Record<string,string>};
+    return {appId:data.app_id,appSlug:data.app_slug,installationUrl:data.html_url,account:data.account.login,permissions:data.permissions};
+  }
 }
