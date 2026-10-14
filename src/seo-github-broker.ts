@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { createGitHubAppJwt } from "./github";
 import type { Env } from "./types";
