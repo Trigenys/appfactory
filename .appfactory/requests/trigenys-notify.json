@@ -1,0 +1,9 @@
+{
+  "name": "Trigenys Notify",
+  "slug": "trigenys-notify",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "Reusable multi-tenant event-driven staff notification service for Trigenys products; Telegram Bot API and WAHA WhatsApp adapters, initially serving Xeption stock, product images, barter and marketplace alerts.",
+  "language": "fr"
+}
