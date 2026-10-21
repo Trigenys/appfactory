@@ -1,0 +1,9 @@
+{
+  "name": "Trigenys Storage",
+  "slug": "trigenys-storage",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": false,
+  "description": "Shared multi-tenant media storage API for Trigenys products, backed by private Cloudflare R2, Cloudflare Worker and D1, starting with Xeption.",
+  "language": "fr"
+}
