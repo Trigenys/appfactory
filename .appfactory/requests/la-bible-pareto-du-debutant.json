@@ -1,0 +1,10 @@
+{
+  "name": "La Bible Pareto du Débutant",
+  "slug": "la-bible-pareto-du-debutant",
+  "projectType": "webapp",
+  "preset": "react-vite",
+  "private": true,
+  "description": "Collection éditoriale de livres techniques pour débutants fondée sur une pédagogie Pareto, des exercices reproductibles et des éditions versionnées.",
+  "brief": "Projet éditorial de la collection La Bible Pareto du Débutant. Le dépôt sert d'abord de source de vérité aux manuscrits Markdown, aux exemples, exercices et exports PDF/EPUB. Une future bibliothèque de lecture web pourra réutiliser le socle React, mais ne doit pas être déployée ni confondue avec un produit SaaS à ce stade. Aucun backend, aucune base de données et aucune infrastructure Cloudflare ne doivent être provisionnés.",
+  "language": "fr"
+}
