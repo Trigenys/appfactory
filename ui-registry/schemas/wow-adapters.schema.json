@@ -42,7 +42,8 @@
               "external-tool",
               "component-pattern",
               "registry-block",
-              "guidance"
+              "guidance",
+              "experience-reference"
             ]
           },
           "optionalService": {

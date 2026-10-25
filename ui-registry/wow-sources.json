@@ -183,6 +183,166 @@
       "executionAllowed": false,
       "risk": "high",
       "reviewedOn": "2026-10-09"
+    },
+    {
+      "id": "ln-dev-landing-pages",
+      "repository": "https://github.com/ln-dev7/landing-pages",
+      "kind": "experience",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "fizzifresh",
+      "repository": "https://github.com/TheNeovimmer/fizzifresh",
+      "kind": "experience",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "tailwind"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "david-heckhoff-portfolio",
+      "repository": "https://github.com/davidhckh/portfolio-2025",
+      "kind": "experience",
+      "frameworks": [
+        "vue"
+      ],
+      "styling": [
+        "scss"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "giats-fluid-portfolio",
+      "repository": "https://github.com/Giats2498/giats-portfolio",
+      "kind": "experience",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "scss"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "wibe-fashion-studio",
+      "repository": "https://github.com/Divyanshu-RS/Wibe-Studio",
+      "kind": "experience",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "css"
+      ],
+      "license": {
+        "spdx": "CC0-1.0",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "noctis-creative-lab",
+      "repository": "https://github.com/Srv99x/NOCTIS",
+      "kind": "experience",
+      "frameworks": [
+        "react"
+      ],
+      "styling": [
+        "css"
+      ],
+      "license": {
+        "spdx": null,
+        "verification": "unverified"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "high",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "codrops-pixel-gallery",
+      "repository": "https://github.com/J0SUKE/gsap-threejs-codrops",
+      "kind": "experience",
+      "frameworks": [
+        "astro"
+      ],
+      "styling": [
+        "css"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-25"
+    },
+    {
+      "id": "codrops-interlude",
+      "repository": "https://github.com/codrops/interlude",
+      "kind": "experience",
+      "frameworks": [
+        "astro"
+      ],
+      "styling": [
+        "css"
+      ],
+      "license": {
+        "spdx": "MIT",
+        "verification": "metadata-only"
+      },
+      "reuse": "reference-only",
+      "reviewedCommit": null,
+      "executionAllowed": false,
+      "risk": "medium",
+      "reviewedOn": "2026-10-25"
     }
   ]
 }

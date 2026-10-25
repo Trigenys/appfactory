@@ -104,6 +104,101 @@
       "executable": false,
       "autoInstall": false,
       "notes": "Motion/GSAP/Three references; upstream license status unverified."
+    },
+    {
+      "sourceId": "ln-dev-landing-pages",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "fizzifresh",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "david-heckhoff-portfolio",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "giats-fluid-portfolio",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "wibe-fashion-studio",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "motion"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "noctis-creative-lab",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "codrops-pixel-gallery",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
+    },
+    {
+      "sourceId": "codrops-interlude",
+      "interfaceKind": "experience-reference",
+      "optionalService": false,
+      "motionHints": [
+        "gsap",
+        "three"
+      ],
+      "executable": false,
+      "autoInstall": false,
+      "notes": "Creative direction reference only; no upstream markup, images, fonts or scripts may be copied into generated sites. Build original compositions."
     }
   ]
 }
