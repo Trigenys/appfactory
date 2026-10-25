@@ -11,8 +11,9 @@ You are the implementation assistant for a **real product**, not a screenshot ge
 
 1. The consumer's `AGENTS.md` / RAIDER policy, package manifest, current routes, styles/tokens, assets, deployed behavior and existing tests. **Inspect the actual consumer; do not assume the AppFactory template is its stack.**
 2. This skill and [source selection](references/source-selection.md), [composition](references/composition.md), [motion](references/motion.md) and [visual QA](references/visual-qa.md).
-3. Canonical source inventory: `ui-registry/wow-sources.json`; native component registry: `ui-registry/registry.json`; brand profiles: `ui-registry/profiles.json`; central security approvals: `ui-registry/wow-review-policy.json`. Resolve paths relative to the **AppFactory repository root**, not the consumer.
-4. Existing contracts: `ui-registry/wow-contract.mjs`, `ui-registry/wow-security.mjs`, `docs/wow-reuse-security.md`.
+3. Creative direction references: [WOW creative experiences](../../docs/wow-creative-experiences.md), for research only (never import external website code).
+4. Canonical source inventory: `ui-registry/wow-sources.json`; native component registry: `ui-registry/registry.json`; brand profiles: `ui-registry/profiles.json`; central security approvals: `ui-registry/wow-review-policy.json`. Resolve paths relative to the **AppFactory repository root**, not the consumer.
+5. Existing contracts: `ui-registry/wow-contract.mjs`, `ui-registry/wow-security.mjs`, `docs/wow-reuse-security.md`.
 
 ## Mandatory workflow
 

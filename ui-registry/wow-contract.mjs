@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ID = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const TOKEN = /^[a-z][a-z0-9-]{0,47}$/;
-const KINDS = new Set(["mcp","component","block","guidelines"]);
+const KINDS = new Set(["mcp","component","block","guidelines","experience"]);
 const RISKS = new Set(["low","medium","high"]);
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const keysOnly = (v, allowed, prefix, errors) => {

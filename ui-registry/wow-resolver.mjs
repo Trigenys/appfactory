@@ -6,13 +6,14 @@ import { validateWowReviewPolicy, wowSourceDisposition } from "./wow-security.mj
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-const INTERFACES = new Set(["external-tool","component-pattern","registry-block","guidance"]);
+const INTERFACES = new Set(["external-tool","component-pattern","registry-block","guidance","experience-reference"]);
 const RUNTIMES = new Set(["none","motion","gsap","three"]);
 const KINDS = {
   mcp:"external-tool",
   component:"component-pattern",
   block:"registry-block",
-  guidelines:"guidance"
+  guidelines:"guidance",
+  experience:"experience-reference"
 };
 const safeToken = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const keysOnly = (value, allowed, name, errors) => {
@@ -112,7 +113,7 @@ export function resolveWowAdapters({
     const sameStyling = source.styling.includes("any") || source.styling.includes(consumer.stack.styling);
 
     let technicalFit = "reference-only";
-    if (adapter.interfaceKind !== "external-tool" && adapter.interfaceKind !== "guidance") {
+    if (adapter.interfaceKind !== "external-tool" && adapter.interfaceKind !== "guidance" && adapter.interfaceKind !== "experience-reference") {
       if (sameFramework) technicalFit = sameStyling ? "native" : "adapt";
     }
     // The central license review and source family are checked BEFORE any
@@ -145,6 +146,7 @@ export function resolveWowAdapters({
     if (decision === "adapt") reasons.push("manual adaptation only; registry installation not allowed on this styling stack");
     if (decision === "native") reasons.push("stack appears compatible; component-specific review remains required");
     if (adapter.interfaceKind === "guidance") reasons.push("guideline source has no executable UI component");
+    if (adapter.interfaceKind === "experience-reference") reasons.push("full-site inspiration only: no external source can be adopted as a native component");
 
     return {
       sourceId:id,repository:source.repository,interfaceKind:adapter.interfaceKind,

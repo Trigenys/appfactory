@@ -24,7 +24,7 @@ const approved = (id, mode="copy-adapt") => {
       reviewedOn:"2026-10-10",allowedModes:[mode],noticeFile:"THIRD_PARTY_NOTICES.md"}]};
 };
 
-test("all nine sources have matching safe adapters and no installation commands",()=>{
+test("all sources have matching safe adapters and no installation commands",()=>{
   assert.equal(adapters.adapters.length,inventory.sources.length);
   assert.deepEqual(validateWowAdapters(adapters,inventory),[]);
   const schema=JSON.parse(fs.readFileSync("ui-registry/schemas/wow-adapters.schema.json","utf8"));
@@ -58,12 +58,12 @@ test("metadata source and adapters never let an unknown or spoofed entry gain co
   assert.match(errs,/execution and automatic installation are forbidden/);
 });
 
-test("current source inventory resolves across all nine sources but never grants reuse",()=>{
+test("current source inventory resolves across all sources but never grants reuse",()=>{
   const result=resolve();
   assert.equal(result.ok,true);
   assert.equal(result.status,"PLAN_ONLY");
   assert.equal(result.operationsAllowed,false);
-  assert.equal(result.sources.length,9);
+  assert.equal(result.sources.length,inventory.sources.length);
   assert.ok(result.sources.every(x=>x.decision==="reference-only"));
   assert.ok(result.sources.every(x=>x.actions.installAutomatically===false));
   assert.ok(result.sources.every(x=>x.actions.copyAutomatically===false));
@@ -174,4 +174,19 @@ test("disabled consumers cause no resolution and no operations",()=>{
 test("resolver has no network calls or child process/install shell primitives",()=>{
   const text=fs.readFileSync("ui-registry/wow-resolver.mjs","utf8");
   assert.doesNotMatch(text,/\b(?:fetch\s*\(|axios|child_process|execSync|spawnSync|writeFileSync|npm install|npx|curl)\b/i);
+});
+
+
+test("creative experiences are strictly reference-only, even when framework matches",()=>{
+  const ids=["fizzifresh","david-heckhoff-portfolio","giats-fluid-portfolio","noctis-creative-lab"];
+  const report=resolve({consumer:consumer("react-vite","css",ids)});
+  assert.equal(report.ok,true);
+  assert.equal(report.sources.length,ids.length);
+  for(const source of report.sources){
+    assert.equal(source.interfaceKind,"experience-reference");
+    assert.equal(source.technicalFit,"reference-only");
+    assert.equal(source.decision,"reference-only");
+    assert.deepEqual(source.approvedModes,[]);
+    assert.equal(source.actions.copyAutomatically,false);
+  }
 });

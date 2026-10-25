@@ -73,7 +73,7 @@ export function validateWowReviewPolicy(policy, inventory) {
       errors.push(label + " modes must be unique reviewed copy-adapt/registry-install");
     if (!safePath(a.noticeFile) || !/^(?:THIRD_PARTY_NOTICES\.md|licenses\/[A-Za-z0-9_.@/-]+)$/.test(a.noticeFile ?? ""))
       errors.push(label + " noticeFile must be THIRD_PARTY_NOTICES.md or licenses/...");
-    if (source && (source.kind === "mcp" || source.kind === "guidelines"))
+    if (source && (source.kind === "mcp" || source.kind === "guidelines" || source.kind === "experience"))
       errors.push(label + " tool/guideline sources cannot grant component reuse");
   }
   return errors;
