@@ -119,3 +119,27 @@ test("router verifies OIDC before handling any private D1 document",()=>{
   assert.match(auth,/return verifyOidcToken\(request,/);
   assert.doesNotMatch(index,/D1_DOCUMENT.*?console.log/);
 });
+
+test("native D1 binding serves allowed documents without any Cloudflare API token",async()=>{
+  const current={schemaVersion:1,revision:3,goals:[],events:[]};
+  const calls=[];
+  const envWithBinding={
+    COMMAND_CENTER_DB:{
+      prepare(sql){return {bind(...params){calls.push({sql,params});return {
+        async first(){return {value:JSON.stringify(current),version:3};},
+        async run(){return {meta:{changes:1}};},
+      };}};},
+    },
+  };
+  const failFetch=async()=>{throw new Error("Cloudflare REST must not be called");};
+  const result=await handleD1DocumentRequest(envWithBinding,valid(),ref,
+    {action:"read",document:"goals"},failFetch);
+  assert.equal(result.value.revision,3);
+  assert.equal(calls.length,1);
+  assert.match(calls[0].sql,/SELECT value, version FROM cc_documents/);
+  const put=await handleD1DocumentRequest(envWithBinding,valid(),ref,
+    {action:"put",document:"audit",expectedVersion:3,
+      value:{generatedAt:"2026-10-26T11:56:00Z",projects:[]}},failFetch);
+  assert.equal(put.changes,1);
+  assert.equal(calls.some(x=>x.sql.startsWith("UPDATE")),true);
+});
