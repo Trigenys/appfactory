@@ -90,3 +90,9 @@ test("product README tooling changes run only the separate documentation gate", 
   assert.equal(result.ignored.length, 3);
   assert.ok(Object.values(result.gates).every((value) => value === false));
 });
+
+test("presentation contract belongs to independent README quality CI, not full platform CI", () => {
+  const result = classifyChanges(["scripts/product-readme-presentation.mjs", "test/product-readme-presentation.test.mjs"], config);
+  assert.ok(Object.values(result.gates).every(value => value === false));
+  assert.equal(result.ignored.length, 2);
+});
