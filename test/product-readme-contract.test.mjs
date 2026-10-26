@@ -112,3 +112,26 @@ test('CLI plan/apply is safe, repeatable and refuses overwriting a consumer READ
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('the same contract supports a non-security product without repository-specific rules', () => {
+  const operations = specification();
+  operations.name = 'Fulfillment Ledger';
+  operations.stage = 'beta';
+  operations.tagline = 'Coordinate warehouse exceptions using reliable, auditable order processing workflows.';
+  operations.problem = 'Small teams reconcile order status across disconnected warehouse and courier software, creating avoidable manual updates, delays, and inconsistent delivery records for customers.';
+  operations.scenario = 'A warehouse receives two conflicting carrier scans for the same parcel while a staff member retries the dispatch job, so duplicate records must be detected before committing another shipment event.';
+  operations.differentiation = 'Each order transition is validated against explicit lifecycle constraints, making stale retries safe and preserving a consistent operational ledger across webhook integrations.';
+  operations.architecture = 'Carrier event -> validation -> idempotent processing -> durable store -> warehouse dashboard -> audit trail with operational recovery.';
+  operations.limitations = 'The initial beta does not support every delivery provider, cannot provide carrier SLAs, and does not reconcile offline inventory without an explicit synchronization policy.';
+  operations.capabilities = [
+    { name: 'Webhook intake', status: 'planned', description: 'Validate provider signatures and normalize inbound carrier events before any state change.' },
+    { name: 'Dispatch console', status: 'in-development', description: 'Expose operational exceptions for staff review and bounded retries.' }
+  ];
+  operations.references = [
+    { name: 'OpenAPI', url: 'https://spec.openapis.org/oas/latest.html', relevance: 'Describe versioned service contracts across independent providers.' }
+  ];
+  const readme = renderProductReadme(operations);
+  assert.match(readme, /Fulfillment Ledger/);
+  assert.match(readme, /operational exceptions/);
+  assert.deepEqual(auditProductReadme(operations, readme).findings, []);
+});
