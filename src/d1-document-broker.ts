@@ -84,7 +84,7 @@ function requireDocumentShape(key: DocKey, value: unknown) {
     case "reports": valid = Array.isArray(value) && value.length <= 240 &&
       value.every((v: any) => v?.schemaVersion === 1 &&
         typeof v.id === "string" && /^command-center:(weekly|monthly)-(plan|review):/.test(v.id) &&
-        v.lifecycle === "draft" && v.audiences?.team?.autoSend === false); break;
+        ["draft","approved","sent","error"].includes(v.lifecycle) && v.audiences?.team?.autoSend === false); break;
     case "goals": valid = false; break; // never written by this broker
   }
   if (!valid) throw new D1BrokerError(400,"D1_DOCUMENT_INVALID","Document shape is not allowed.");
@@ -164,8 +164,16 @@ export async function handleD1DocumentRequest(
   const current = read.results?.[0];
   const priorVersion = current ? Number(current.version) : null;
   if (priorVersion !== operation.expectedVersion) return {document,changes:0};
-  if (document === "reports" && current) {
-    preserveFinalizedReports(JSON.parse(String(current.value)),value);
+  if (document === "reports") {
+    const existing = current ? JSON.parse(String(current.value)) : [];
+    preserveFinalizedReports(existing,value);
+    const known = new Set((existing as Array<{id:string}>).map(r => r.id));
+    for (const incoming of value as Array<{id:string;lifecycle:string}>) {
+      if (!known.has(incoming.id) && incoming.lifecycle !== "draft") {
+        throw new D1BrokerError(403,"D1_DOCUMENT_LIFECYCLE_FORBIDDEN",
+          "Only a draft report can be created by a CI collector.");
+      }
+    }
   }
   if (current && String(current.value) === encoded) return {document,changes:0};
   const now = new Date().toISOString();
