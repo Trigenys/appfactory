@@ -1,12 +1,135 @@
+<!-- appfactory:hero:start -->
+<div align="center">
+
 # AppFactory
 
-Automated software delivery platform for generating, validating and deploying applications.
+### Define the product. Automate the engineering.
 
-## Current milestone — M3 OpenPage Engine POC
+**A RAIDER-governed software delivery control plane for generating, validating and provisioning real applications through reusable blueprints and secure GitHub workflows.**
 
-AppFactory has validated its native brief-to-manifest pipeline and modular landing renderer. M3 now introduces a pluggable generation-engine boundary so open-source website generators can be connected without turning the Worker itself into a giant design engine.
+[![Stage: Active beta](https://img.shields.io/badge/Stage-Active%20beta-orange)](#maturity-and-boundaries)
+[![Blueprints: 5 families](https://img.shields.io/badge/Blueprints-5%20families-2563eb)](#blueprint-catalog)
+[![Identity: OIDC + GitHub App](https://img.shields.io/badge/Identity-OIDC%20%2B%20GitHub%20App-263238)](#security-model)
+[![Runtime: Cloudflare Workers](https://img.shields.io/badge/Runtime-Cloudflare%20Workers-0969da)](#runtime)
+[![Governance: RAIDER](https://img.shields.io/badge/Governance-RAIDER-6d28d9)](#engineering-governance)
 
-Current architecture:
+[**Why AppFactory**](#why-appfactory) · [**Architecture**](#delivery-architecture) · [**Blueprints**](#blueprint-catalog) · [**Quick start**](#quick-start) · [**Security**](#security-model) · [**Documentation**](docs/product-readme-contract.md) · [**API**](#api) · [**Project status**](#maturity-and-boundaries)
+
+</div>
+
+---
+<!-- appfactory:hero:end -->
+
+## Why AppFactory
+
+**Launching a new application should not mean rebuilding the engineering workflow from scratch.** A repository needs code, but it also needs a tested starting point, scoped credentials, quality gates, ownership boundaries and a reliable path from specification to delivery.
+
+AppFactory turns a **reviewed project specification** into an appropriately governed repository. It does the repetitive platform work once, so each team can concentrate on product-specific behavior.
+
+- **Specify, don't copy.** Choose a versioned blueprint or a native landing-generation path through an explicit request contract.
+- **Provision with guardrails.** GitHub Actions OIDC and GitHub App identities authorize privileged operations; knowing a URL is not sufficient.
+- **Keep infrastructure intentional.** Generic API, webapp, desktop and mobile presets don't silently create billable cloud resources or choose a production database.
+- **Make quality portable.** Reusable CI, Project Automation, and product README assurance come from shared services—not ad hoc repository copies.
+- **Reconcile safely.** Idempotent operations and ownership markers protect existing projects against accidental destructive reprovisioning.
+
+## Delivery architecture
+
+```mermaid
+flowchart TD
+  A["Reviewed project request"] --> B["Trusted GitHub Actions workflow"]
+  B --> C["OIDC identity verification"]
+  C --> D["AppFactory orchestration · Cloudflare Worker"]
+  D --> E{"Project type / preset"}
+  E --> F["Native landing renderer"]
+  E --> G["Versioned service / webapp / desktop / Android blueprint"]
+  E -. "Experimental path" .-> X["OpenPage adapter POC"]
+  F --> H["GitHub repository lifecycle"]
+  G --> H
+  H --> I["Quality gates + Project Automation"]
+  I --> J{"Approved delivery model"}
+  J --> K["Cloudflare Pages / Workers (supported flows)"]
+  J --> L["Consumer-managed hosting or desktop/mobile build"]
+```
+
+The diagram describes the **platform's delivery boundaries**, not a claim that every project type is deployed automatically. External OpenPage generation is still isolated from the production provisioning route.
+
+## Blueprint catalog
+
+| Project family | Supported foundation | Provisioning behavior |
+| --- | --- | --- |
+| **Landing websites** | Native brief → Manifest v2 → modular renderer | Repository generation and the configured Cloudflare Pages delivery path |
+| **API & backend services** | Node.js 24 / TypeScript; specialized entitlements preset | Generic API blueprint stays cloud-neutral; the entitlements preset has its own reviewed Worker/D1 delivery model |
+| **Web applications** | React 19 / TypeScript / Vite | Repository + CI + Project Automation; hosting and auth remain product decisions |
+| **Windows desktop** | Tauri 2 / Rust / React | Native app foundations and CI; no Cloudflare Pages assumption |
+| **Android mobile** | Jetpack Compose + test/CI baseline | Android repository and governed workflow; no implicit app-store release |
+
+Implementation details live in [service](docs/service-blueprints.md), [webapp](docs/webapp-blueprints.md), [desktop](docs/desktop-blueprints.md) and [Android](docs/mobile-blueprints.md) blueprint contracts. The [README quality contract](docs/product-readme-contract.md) covers product documentation independently of the application runtime.
+
+## Quick start
+
+**Local development** (Node.js and the repository dependencies required):
+
+```bash
+npm install
+npm run typecheck
+npm run dev
+```
+
+Provisioning a Trigenys project is an **authorized GitOps workflow**, not an unauthenticated public API call:
+
+1. Add a reviewed manifest to `.appfactory/requests/<slug>.json` in this repository.
+2. Select the supported `projectType` and `preset`, including the desired visibility and product-specific description.
+3. Merge the reviewed request into `main`; the [provisioning workflow](.github/workflows/provision-project.yml) authenticates to AppFactory and creates or reconciles the repository.
+4. Inspect the resulting repository, its CI and [AppFactory Project Automation](https://github.com/EagleFox31/appfactory-project-automation) configuration before adding product infrastructure.
+
+A minimal **generic API service** request looks like:
+
+```json
+{
+  "name": "Example Service",
+  "slug": "example-service",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "A customer-specific API with separately governed infrastructure."
+}
+```
+
+This request **does not deploy** a database or production server for the generic preset. Use the [project request](.appfactory/requests/) and [service blueprint](docs/service-blueprints.md) documentation before assuming a delivery route.
+
+## Security model
+
+**Mutation endpoints are protected operations.** AppFactory validates short-lived GitHub Actions OIDC tokens, expected audience, allowed repository and branch, and the exact trusted workflow identity. GitHub App permissions control repository lifecycle; cloud credentials remain on the Cloudflare side instead of being distributed to every consuming repository.
+
+- Authorization is bound to caller/workflow identity—not to a plain repository name supplied in a payload.
+- Secrets never belong in request manifests, README examples or public CI logs.
+- Unowned brownfield resources are not silently adopted. Reconciliation must be explicit and idempotent.
+- Cloudflare resource authorization and Workers Builds authorization remain separate where provider constraints require it.
+
+See [mutation authentication](docs/mutation-authentication.md), [brownfield Pages](docs/brownfield-pages.md), and [TypeScript Worker runtime](docs/typescript-worker-runtime.md).
+
+## Engineering governance
+
+AppFactory implements the **RAIDER** engineering approach—*Reusable, Agnostic, Idempotent, Durable, Engineering-grade, Retroactive*—as enforceable platform contracts, rather than merely a README slogan.
+
+- **AppFactory** owns blueprints, orchestration, provenance and repository/documentation quality.
+- **[AppFactory Project Automation](https://github.com/EagleFox31/appfactory-project-automation)** owns GitHub Project synchronization, priorities and issue lifecycle.
+- **[Project Registry](https://github.com/EagleFox31/project-registry)** owns the canonical product/capability inventory.
+- **[Trigenys Engineering OS](https://github.com/Trigenys/trigenys-engineering-os)** owns shared engineering guidance and skills.
+
+This README also **uses AppFactory's own presentation and quality contract**, recorded in [`.appfactory/readme-contract.json`](.appfactory/readme-contract.json). Future changes to its managed introduction must remain non-destructive and pass the same read-only audit as consuming repositories.
+
+## Maturity and boundaries
+
+**Active beta: real provisioning and CI capabilities, with clearly bounded experiments.** Existing generic blueprints, OIDC checks, repository creation and CI are implemented. Not every preset provisions runtime infrastructure; external engine rendering/export and some brownfield workflows remain under development or are scoped to specific recipes.
+
+A successful repository bootstrap is **not** evidence that the generated product's business logic is implemented, that its security has been independently certified, or that it has been deployed. Features labeled experimental stay behind explicit validation boundaries.
+
+## Generation engines — native and OpenPage proof of concept
+
+AppFactory has a native brief-to-manifest pipeline and modular landing renderer. The OpenPage integration explores a pluggable generation-engine boundary without absorbing the external project's renderer or treating the proof of concept as production-ready.
+
+Landing-generation path:
 
 ```text
 brief
