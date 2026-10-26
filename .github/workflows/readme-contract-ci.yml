@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - scripts/product-readme-contract.mjs
+      - scripts/product-readme-presentation.mjs
       - test/product-readme-contract.test.mjs
+      - test/product-readme-presentation.test.mjs
       - test/product-readme-workflow.test.mjs
       - .github/workflows/reusable-readme-quality.yml
       - .github/workflows/readme-contract-ci.yml
@@ -13,7 +15,9 @@ on:
     branches: [main]
     paths:
       - scripts/product-readme-contract.mjs
+      - scripts/product-readme-presentation.mjs
       - test/product-readme-contract.test.mjs
+      - test/product-readme-presentation.test.mjs
       - test/product-readme-workflow.test.mjs
       - .github/workflows/reusable-readme-quality.yml
       - .github/workflows/readme-contract-ci.yml
@@ -36,4 +40,4 @@ jobs:
         with:
           node-version: '24'
       - name: Run contract and workflow regression tests (no npm dependencies)
-        run: node --test test/product-readme-contract.test.mjs test/product-readme-workflow.test.mjs
+        run: node --test test/product-readme-contract.test.mjs test/product-readme-presentation.test.mjs test/product-readme-workflow.test.mjs
