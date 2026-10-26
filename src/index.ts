@@ -1,4 +1,6 @@
 import { AuthenticationError, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { authenticateD1Documents } from "./auth";
+import { handleD1DocumentRequest, D1BrokerError } from "./d1-document-broker";
 import { issueDatabaseLease, DatabaseLeaseError } from "./database-lease";
 import { provisionApprovedNeon, NeonProvisioningError } from "./neon-provisioning";
 import { listSecretNames, putSecret } from "./brownfield-worker";
@@ -1264,6 +1266,34 @@ export default {
           error: "NEON_PROVISIONING_FAILED",
           message: "Neon infrastructure provisioning failed."
         }, 502);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/infrastructure/d1/documents") {
+      try {
+        const { claims, expectedRef } = await authenticateD1Documents(request, env);
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > 1_900_000) {
+          return json({error:"D1_DOCUMENT_TOO_LARGE"}, 413);
+        }
+        let body: unknown;
+        try { body = JSON.parse(raw); }
+        catch { return json({error:"D1_DOCUMENT_BAD_REQUEST"}, 400); }
+        const result = await handleD1DocumentRequest(env, claims, expectedRef, body);
+        return new Response(JSON.stringify(result), {
+          status:200,headers:{
+            "content-type":"application/json; charset=utf-8",
+            "cache-control":"no-store, private",
+            "pragma":"no-cache",
+            "x-content-type-options":"nosniff"
+          }
+        });
+      } catch (error) {
+        if (error instanceof AuthenticationError || error instanceof D1BrokerError) {
+          return json({error:error.code},error.status);
+        }
+        // Never log bearer tokens, D1 record values, or provider responses.
+        return json({error:"D1_DOCUMENT_OPERATION_FAILED"}, 502);
       }
     }
 
