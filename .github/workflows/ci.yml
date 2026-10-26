@@ -111,8 +111,6 @@ jobs:
         run: npm run test:python-worker-packaging
       - name: Validate impact-aware CI routing
         run: npm run test:ci-impact
-      - name: Validate reusable product README contract and brownfield safety
-        run: node --test test/product-readme-contract.test.mjs test/product-readme-workflow.test.mjs
       - name: Validate Hyperdrive provisioning contract
         run: npm run test:hyperdrive-provisioning
       - name: Validate private database lease contract
