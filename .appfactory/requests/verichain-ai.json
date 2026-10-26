@@ -1,0 +1,10 @@
+{
+  "name": "VeriChain AI",
+  "slug": "verichain-ai",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "Digital credential verification and fraud-risk analysis with issuer signatures, document integrity checks and privacy-preserving blockchain proofs.",
+  "brief": "RAIDER-first document trust service: issuer-signed credentials, revocation, signed QR verification, privacy-preserving hashes and optional Python AI anomaly analysis. Bootstrap a generic TypeScript API only; no infrastructure, database or paid deployment.",
+  "language": "en"
+}
