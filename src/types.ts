@@ -67,6 +67,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_PAGES_D1_TOKEN?: string;
+  /** Existing private D1 database, bound to AppFactory for OIDC broker access. */
+  COMMAND_CENTER_DB?: D1Database;
   /** Dedicated least-privilege token for AppFactory R2 bucket provisioning. */
   CLOUDFLARE_R2_TOKEN?: string;
   CLOUDFLARE_BUILD_TOKEN_UUID?: string;
