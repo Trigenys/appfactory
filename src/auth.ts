@@ -414,3 +414,12 @@ export async function authenticateNeonProvisioning(
 
   return claims;
 }
+
+/** Exact GitHub OIDC identity for AppFactory private D1 document access.
+ * Business/document grants are evaluated separately in d1-document-broker.ts.
+ */
+export async function authenticateD1Documents(request: Request, env: Env):
+  Promise<{claims: GitHubOidcClaims; expectedRef: string}> {
+  // No development shortcut: the private document broker always verifies JWT.
+  return verifyOidcToken(request, {...env,ENVIRONMENT:"production"});
+}
