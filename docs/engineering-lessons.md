@@ -32,3 +32,17 @@ This file is the AppFactory-level RAIDER failure-memory log. Significant failure
 **Fix:** profile lookup now distinguishes an absent profile key from a malformed configured profile and reports only sorted profile names. Credential fields are never returned.
 
 **Prevention rule:** health checks for structured secret registries must separate “registry configured” from “requested entry valid”. Diagnostics may expose non-sensitive keys, never credential values.
+
+## 2026-10-26 — A product README edit is incomplete without a reusable quality contract
+
+**Category:** architecture · documentation · reuse-first · automation
+
+**What happened:** an attractive, security-focused README was written directly for AgentShield AI, but its structure, evidence rules and capability maturity guarantees were not available to other AppFactory products. Future repositories would still require the same manual fixes.
+
+**Root cause:** product narrative quality had no reusable interface. Local prose editing was mistaken for improvement of the delivery platform.
+
+**Resolution (proposed):** introduce a declarative Product README contract owned by AppFactory: deterministic rendering, a non-destructive plan/apply boundary, brownfield audit, an opt-in secretless workflow with immutable version pinning, and tests. Reuse Trigenys Engineering OS's canonical `technical-documentation` skill for authorship rather than duplicating editorial guidance.
+
+**Prevention rule:** when a product-specific improvement reveals a repeatable cross-product need, create an independently adoptable contract at the owning platform layer. A product-specific README remains consumer-owned and is never silently overwritten. Claims about shipped capabilities require evidence; external security standards are design references, not certifications.
+
+**Release boundary:** this PR adds the capability for review; no consumer is automatically migrated until the workflow is merged, pinned and tested on the existing consumer.

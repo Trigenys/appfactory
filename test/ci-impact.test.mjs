@@ -79,3 +79,14 @@ test("UI Registry changes run core and webapp, not unrelated platform gates", ()
   assert.equal(result.gates.desktop, false);
   assert.equal(result.gates.service, false);
 });
+
+test("product README tooling changes run only the separate documentation gate", () => {
+  const result = classifyChanges([
+    "scripts/product-readme-contract.mjs",
+    "test/product-readme-contract.test.mjs",
+    ".github/workflows/reusable-readme-quality.yml"
+  ], config);
+  assert.equal(result.forcedAll, false);
+  assert.equal(result.ignored.length, 3);
+  assert.ok(Object.values(result.gates).every((value) => value === false));
+});
