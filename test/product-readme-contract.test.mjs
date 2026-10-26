@@ -46,7 +46,7 @@ test('render is deterministic and distinguishes planned from shipped capabilitie
   assert.match(markdown, /Tool policy\*\* \(planned\)/);
   assert.match(markdown, /Event verification\*\* \(shipped\)/);
   assert.match(markdown, /Evidence: docs\/verification\.md/);
-  assert.match(markdown, /does not establish third-party certification/i);
+  assert.match(markdown, /do not establish third-party certification/i);
   assert.equal(auditProductReadme(contract, markdown).ok, true);
 });
 
