@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const workflow = fs.readFileSync(
   new URL('../.github/workflows/reusable-readme-quality.yml', import.meta.url), 'utf8'
 );
-const ci = fs.readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+const ci = fs.readFileSync(new URL('../.github/workflows/readme-contract-ci.yml', import.meta.url), 'utf8');
 
 test('README quality caller is read-only and explicitly consumer configurable', () => {
   assert.match(workflow, /^  workflow_call:/m);
@@ -25,8 +25,10 @@ test('the reusable workflow checks an immutable runtime and never pushes', () =>
   assert.doesNotMatch(workflow, /\bgit push\b|--mode apply/);
 });
 
-test('documentation audit unit tests run in the AppFactory core-only CI gate', () => {
+test('README audit has isolated path-scoped dependency-free CI', () => {
   assert.match(ci, /test\/product-readme-contract\.test\.mjs/);
   assert.match(ci, /test\/product-readme-workflow\.test\.mjs/);
-  assert.match(ci, /if: needs\.impact\.outputs\.core == 'true'/);
+  assert.match(ci, /paths:/);
+  assert.match(ci, /node --test/);
+  assert.doesNotMatch(ci, /npm install|wrangler deploy|gradle|cargo check/);
 });
