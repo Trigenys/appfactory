@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { validatePresentation, renderPresentationHero, auditPresentation, planPresentationSync, syncPresentationHero } from './product-readme-presentation.mjs';
 
 const STAGES = new Set(['idea', 'design', 'prototype', 'mvp', 'beta', 'production']);
 const STATUSES = new Set(['planned', 'in-development', 'shipped']);
@@ -72,6 +73,7 @@ export function validateReadmeManifest(spec) {
     validateList(spec.requiredTerms, 'requiredTerms', 1)
       .forEach((item) => assertMeaningful(item, 'requiredTerms item'));
   }
+  if (spec.presentation !== undefined) validatePresentation(spec.presentation);
   if (spec.requiredFiles !== undefined) {
     if (!Array.isArray(spec.requiredFiles)) throw new Error('requiredFiles must be an array.');
     spec.requiredFiles.forEach((item) => assertMeaningful(item, 'requiredFiles item'));
@@ -86,9 +88,7 @@ export function renderProductReadme(spec) {
     return '- **' + item.name + '** (' + item.status + ') — ' + item.description + evidence;
   });
   return [
-    '# ' + spec.name,
-    '',
-    '> **' + spec.tagline + '**',
+    ...(spec.presentation ? [renderPresentationHero(spec)] : ['# ' + spec.name, '', '> **' + spec.tagline + '**', '']),
     '',
     '**Product maturity:** ' + spec.stage + '. **Scope:** capabilities below are explicitly marked as planned, in-development or shipped.',
     '',
@@ -155,6 +155,7 @@ export function auditProductReadme(spec, readme, { fileExists = () => true } = {
   for (const file of spec.requiredFiles ?? []) {
     if (!fileExists(file)) findings.push('Referenced local evidence does not exist: ' + file);
   }
+  if (spec.presentation) findings.push(...auditPresentation(spec, readme));
   for (const capability of spec.capabilities) {
     if (capability.status === 'shipped' && !normalized.includes(normalize(capability.evidence))) {
       findings.push('Shipped capability lacks its declared evidence link: ' + capability.name);
@@ -186,8 +187,8 @@ function parseArguments(args) {
     options[option.slice(2)] = args[i + 1];
     i += 1;
   }
-  if (!['audit', 'plan', 'apply'].includes(options.mode)) {
-    throw new Error('--mode must be audit, plan or apply.');
+  if (!['audit', 'plan', 'apply', 'hero-plan', 'hero-sync'].includes(options.mode)) {
+    throw new Error('--mode must be audit, plan, apply, hero-plan or hero-sync.');
   }
   if (!options.manifest) throw new Error('--manifest is required.');
   return options;
@@ -209,7 +210,15 @@ function main() {
   const existing = fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf8') : null;
   let result;
 
-  if (args.mode === 'audit') {
+  if (args.mode === 'hero-plan' || args.mode === 'hero-sync') {
+    if (existing === null) throw new Error('README does not exist: cannot synchronize hero.');
+    if (!spec.presentation) throw new Error('Manifest has no presentation declaration.');
+    result = planPresentationSync(spec, existing);
+    if (args.mode === 'hero-sync' && result.action === 'update-managed-hero') {
+      fs.writeFileSync(readmePath, syncPresentationHero(spec, existing));
+      result = { action: 'updated-managed-hero', path: readmePath };
+    }
+  } else if (args.mode === 'audit') {
     result = existing === null
       ? { ok: false, findings: ['README does not exist.'] }
       : auditProductReadme(spec, existing, {

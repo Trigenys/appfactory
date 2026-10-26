@@ -46,3 +46,14 @@ This file is the AppFactory-level RAIDER failure-memory log. Significant failure
 **Prevention rule:** when a product-specific improvement reveals a repeatable cross-product need, create an independently adoptable contract at the owning platform layer. A product-specific README remains consumer-owned and is never silently overwritten. Claims about shipped capabilities require evidence; external security standards are design references, not certifications.
 
 **Release boundary:** this PR adds the capability for review; no consumer is automatically migrated until the workflow is merged, pinned and tested on the existing consumer.
+
+
+## 2026-10-26 — A content-valid README may still be visually generic
+
+**What happened:** AppFactory passed its product README content contract for AgentShield, Aegis and VeriChain, but only AgentShield had a centered title, memorable one-line proposition, product-specific badges and useful section navigation. The presentation gap was visible directly on the GitHub repository front page.
+
+**Root cause:** the original reusable contract modeled content completeness and maturity but not hero presentation, so the author manually styled one consumer and the others retained a generic Markdown introduction.
+
+**Resolution:** add an optional, declarative presentation specification owned by AppFactory; implement a single renderer, exact audit of the marked hero, anchor validation and bounded updates of marked content only. Apply to different products with different copy and badges. Retain authored body content.
+
+**RAIDER prevention rule:** declare visual documentation contracts when README consistency is a product requirement; validate the **actual output structure**, not just headings or keyword counts. Extend existing consumers through a non-destructive, explicit migration and independently tested shared module. Never equate a visually polished README with production capability or standards certification.

@@ -19,7 +19,9 @@
       "test/product-readme-contract.test.mjs",
       "test/product-readme-workflow.test.mjs",
       ".github/workflows/reusable-readme-quality.yml",
-      ".github/workflows/readme-contract-ci.yml"
+      ".github/workflows/readme-contract-ci.yml",
+      "scripts/product-readme-presentation.mjs",
+      "test/product-readme-presentation.test.mjs"
     ],
     "prefixes": [
       "docs/",
