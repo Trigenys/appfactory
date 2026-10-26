@@ -113,6 +113,8 @@ jobs:
         run: npm run test:ci-impact
       - name: Validate Hyperdrive provisioning contract
         run: npm run test:hyperdrive-provisioning
+      - name: Validate OIDC-scoped D1 document broker
+        run: npm run test:d1-document-broker
       - name: Validate private database lease contract
         run: npm run test:database-lease
       - name: Validate Neon-to-Cloudflare secrets provisioning
