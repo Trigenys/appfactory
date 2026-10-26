@@ -1,0 +1,10 @@
+{
+  "name": "Trigenys Aegis",
+  "slug": "trigenys-aegis",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "Multi-tenant security event ingestion and policy-driven threat monitoring platform with explainable AI triage and tamper-evident audit evidence.",
+  "brief": "RAIDER-first security monitoring SaaS: tenant isolation, normalized signed event ingestion, deterministic detection rules, consent-driven automated response, verifiable evidence and future Python ML service. Bootstrap a generic TypeScript API only; do not deploy infrastructure, databases or chargeable services.",
+  "language": "en"
+}
