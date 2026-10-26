@@ -116,3 +116,9 @@ The workflow has `contents: read`, does not mutate the consumer and needs no PAT
 ## Important limitations
 
 A content contract checks structure, claimed maturity, referenced paths and specific terms; it cannot independently establish the truth of marketing claims, OWASP conformity or runtime security. Humans still review factual accuracy, copyright and product risks.
+
+## Verified first-consumer pilot
+
+The original open-source AgentShield README remains author-maintained. Its product-specific manifest and wrapper workflow live in [EagleFox31/agentshield-ai PR #6](https://github.com/EagleFox31/agentshield-ai/pull/6). The first read-only audit [completed successfully](https://github.com/EagleFox31/agentshield-ai/actions/runs/40298707488) against an immutable AppFactory feature-branch commit. That pilot does not prove the upstream PR has been released or that every future consumer will pass; merge and pin the reviewed AppFactory runtime first.
+
+The module's test suite also exercises a different non-security product narrative (fulfillment operations) to verify that the renderer and auditor do not depend on AgentShield vocabulary or security-specific headings.
