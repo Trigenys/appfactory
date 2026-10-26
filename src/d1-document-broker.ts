@@ -104,6 +104,23 @@ function preserveFinalizedReports(previous: unknown, incoming: unknown) {
 interface QueryResult { success?: boolean; results?: Record<string,unknown>[]; meta?: { changes?: number }; }
 async function queryResource(env: Env, databaseId: string, sql: string, params: string[],
   fetchImpl: typeof fetch): Promise<QueryResult> {
+  // Native Cloudflare D1 binding avoids dependence on the scope of an API key.
+  // The broker's repository/workflow/document ACL is still authoritative.
+  if (env.COMMAND_CENTER_DB &&
+      databaseId === "bf1864e7-5f64-4063-8761-38bcbb6a8437") {
+    const query = env.COMMAND_CENTER_DB.prepare(sql).bind(...params);
+    try {
+      if (sql.startsWith("SELECT ")) {
+        const row = await query.first();
+        return {success:true,results:row ? [row as Record<string,unknown>] : []};
+      }
+      const result = await query.run();
+      return {success:true,results:[],meta:{changes:Number(result.meta?.changes??0)}};
+    } catch {
+      throw new D1BrokerError(502,"D1_DOCUMENT_BINDING_QUERY_FAILED",
+        "Private bound database query failed.");
+    }
+  }
   const token = env.CLOUDFLARE_PAGES_D1_TOKEN || env.CLOUDFLARE_API_TOKEN;
   if (!env.CLOUDFLARE_ACCOUNT_ID || !token) {
     throw new D1BrokerError(503,"D1_DOCUMENT_CREDENTIAL_UNAVAILABLE",
