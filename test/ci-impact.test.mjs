@@ -96,3 +96,10 @@ test("presentation contract belongs to independent README quality CI, not full p
   assert.ok(Object.values(result.gates).every(value => value === false));
   assert.equal(result.ignored.length, 2);
 });
+
+test("AppFactory self-readme changes only trigger README quality workflow", () => {
+  const result = classifyChanges(["README.md", ".appfactory/readme-contract.json"], config);
+  assert.equal(result.forcedAll, false);
+  assert.equal(result.ignored.length, 2);
+  assert.ok(Object.values(result.gates).every((enabled) => enabled === false));
+});
