@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "name": "AppFactory",
+  "stage": "beta",
+  "tagline": "Define the product once, enforce engineering standards, and automate repeatable repository delivery without manual setup.",
+  "problem": "Building a new software product repeatedly requires scaffolding repositories, configuring CI, establishing identity and security rules, and coordinating infrastructure delivery. Inconsistent one-off setup makes maintenance and governance difficult across multiple teams and products.",
+  "scenario": "A team needs a private API service for a new product. Rather than copy a previous repository, an authorized GitHub workflow submits a reviewed project specification; AppFactory provisions the right blueprint, automation and quality controls while leaving undeclared hosting or database infrastructure uncreated.",
+  "differentiation": "A RAIDER-governed software delivery control plane manages approved project requests, versioned templates, GitHub lifecycle, scoped OIDC identity and reproducible quality gates. The service does not pretend every preset is deployed, and experimental generation engines remain explicitly bounded.",
+  "architecture": "Reviewed project request -> GitHub Actions OIDC authentication -> AppFactory Cloudflare Worker -> validate requirements -> choose versioned blueprint or native landing renderer -> create or reconcile repository -> run GitHub CI and approved deployment path. The OpenPage adapter remains a separate POC.",
+  "limitations": "AppFactory is in active beta: the native landing flow and several versioned repository blueprints exist, while OpenPage end-to-end export is still a POC. Generic service, webapp, desktop and Android blueprints do not imply paid infrastructure provisioning or production application readiness.",
+  "capabilities": [
+    {
+      "name": "Service and API blueprints",
+      "status": "shipped",
+      "description": "Create governed TypeScript API repositories with workflows and opt-in deployment boundaries.",
+      "evidence": "docs/service-blueprints.md"
+    },
+    {
+      "name": "Web and desktop scaffolds",
+      "status": "shipped",
+      "description": "Provide versioned React/Vite and Tauri foundations without silently selecting hosting providers.",
+      "evidence": "docs/webapp-blueprints.md"
+    },
+    {
+      "name": "Android Compose scaffolds",
+      "status": "shipped",
+      "description": "Generate repositories for native Android applications with documented CI checks.",
+      "evidence": "docs/mobile-blueprints.md"
+    },
+    {
+      "name": "OIDC-protected provisioning",
+      "status": "shipped",
+      "description": "Authenticate privileged project mutations with short-lived GitHub workflow identity.",
+      "evidence": "docs/mutation-authentication.md"
+    },
+    {
+      "name": "Product README assurance",
+      "status": "shipped",
+      "description": "Render and audit GitHub-native product introductions with evidence-backed maturity and managed presentation blocks.",
+      "evidence": "docs/product-readme-contract.md"
+    },
+    {
+      "name": "External OpenPage engine adapter",
+      "status": "in-development",
+      "description": "Develop the isolated proof-of-concept generation path before allowing full project provisioning."
+    }
+  ],
+  "roadmap": [
+    {
+      "name": "Engine adapter maturity",
+      "exitCriteria": "External generator output can be rendered, verified and exported end-to-end before opening its production provisioning path."
+    },
+    {
+      "name": "Reusable quality and onboarding",
+      "exitCriteria": "A second unrelated consumer validates each versioned contract and safe brownfield adoption."
+    },
+    {
+      "name": "Secure delivery evolution",
+      "exitCriteria": "Identity boundaries and deployment controls are validated with negative tests and reversible, repeatable workflows."
+    }
+  ],
+  "references": [
+    {
+      "name": "RAIDER engineering standard",
+      "url": "https://github.com/EagleFox31/project-registry/blob/main/RAIDER.md",
+      "relevance": "Canonical architecture, idempotency and reuse-first delivery principles."
+    },
+    {
+      "name": "GitHub Actions documentation",
+      "url": "https://docs.github.com/en/actions",
+      "relevance": "Identity-scoped workflows and repository lifecycle integration."
+    },
+    {
+      "name": "Cloudflare Workers documentation",
+      "url": "https://developers.cloudflare.com/workers/",
+      "relevance": "Managed Worker runtime, APIs and delivery boundaries."
+    }
+  ],
+  "requiredHeadings": [
+    "Why AppFactory",
+    "Delivery architecture",
+    "Blueprint catalog",
+    "Quick start",
+    "Maturity and boundaries",
+    "Security model",
+    "Engineering governance",
+    "API",
+    "Local development"
+  ],
+  "requiredTerms": [
+    "OIDC",
+    "RAIDER",
+    "OpenPage",
+    "Cloudflare",
+    "idempotent"
+  ],
+  "requiredFiles": [
+    "docs/service-blueprints.md",
+    "docs/webapp-blueprints.md",
+    "docs/desktop-blueprints.md",
+    "docs/mobile-blueprints.md",
+    "docs/product-readme-contract.md",
+    "docs/mutation-authentication.md",
+    "docs/openpage-engine-poc.md"
+  ],
+  "presentation": {
+    "variant": "centered",
+    "headline": "Define the product. Automate the engineering.",
+    "summary": "A RAIDER-governed software delivery control plane for generating, validating and provisioning real applications through reusable blueprints and secure GitHub workflows.",
+    "badges": [
+      {
+        "label": "Stage",
+        "value": "Active beta",
+        "color": "orange",
+        "href": "#maturity-and-boundaries"
+      },
+      {
+        "label": "Blueprints",
+        "value": "5 families",
+        "color": "2563eb",
+        "href": "#blueprint-catalog"
+      },
+      {
+        "label": "Identity",
+        "value": "OIDC + GitHub App",
+        "color": "263238",
+        "href": "#security-model"
+      },
+      {
+        "label": "Runtime",
+        "value": "Cloudflare Workers",
+        "color": "0969da",
+        "href": "#runtime"
+      },
+      {
+        "label": "Governance",
+        "value": "RAIDER",
+        "color": "6d28d9",
+        "href": "#engineering-governance"
+      }
+    ],
+    "navigation": [
+      {
+        "label": "Why AppFactory",
+        "href": "#why-appfactory"
+      },
+      {
+        "label": "Architecture",
+        "href": "#delivery-architecture"
+      },
+      {
+        "label": "Blueprints",
+        "href": "#blueprint-catalog"
+      },
+      {
+        "label": "Quick start",
+        "href": "#quick-start"
+      },
+      {
+        "label": "Security",
+        "href": "#security-model"
+      },
+      {
+        "label": "Documentation",
+        "href": "docs/product-readme-contract.md"
+      },
+      {
+        "label": "API",
+        "href": "#api"
+      },
+      {
+        "label": "Project status",
+        "href": "#maturity-and-boundaries"
+      }
+    ]
+  }
+}

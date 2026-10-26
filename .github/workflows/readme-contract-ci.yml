@@ -3,6 +3,8 @@ name: Product README Contract CI
 on:
   pull_request:
     paths:
+      - README.md
+      - .appfactory/readme-contract.json
       - scripts/product-readme-contract.mjs
       - scripts/product-readme-presentation.mjs
       - test/product-readme-contract.test.mjs
@@ -14,6 +16,8 @@ on:
   push:
     branches: [main]
     paths:
+      - README.md
+      - .appfactory/readme-contract.json
       - scripts/product-readme-contract.mjs
       - scripts/product-readme-presentation.mjs
       - test/product-readme-contract.test.mjs
@@ -41,3 +45,5 @@ jobs:
           node-version: '24'
       - name: Run contract and workflow regression tests (no npm dependencies)
         run: node --test test/product-readme-contract.test.mjs test/product-readme-presentation.test.mjs test/product-readme-workflow.test.mjs
+      - name: Dogfood AppFactory product README contract
+        run: node scripts/product-readme-contract.mjs --mode audit --manifest .appfactory/readme-contract.json --root .
