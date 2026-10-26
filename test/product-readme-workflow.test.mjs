@@ -28,6 +28,7 @@ test('the reusable workflow checks an immutable runtime and never pushes', () =>
 test('README audit has isolated path-scoped dependency-free CI', () => {
   assert.match(ci, /test\/product-readme-contract\.test\.mjs/);
   assert.match(ci, /test\/product-readme-workflow\.test\.mjs/);
+  assert.match(ci, /test\/product-readme-presentation\.test\.mjs/);
   assert.match(ci, /paths:/);
   assert.match(ci, /node --test/);
   assert.doesNotMatch(ci, /npm install|wrangler deploy|gradle|cargo check/);
