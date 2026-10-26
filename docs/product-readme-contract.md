@@ -122,3 +122,48 @@ A content contract checks structure, claimed maturity, referenced paths and spec
 The original open-source AgentShield README remains author-maintained. Its product-specific manifest and wrapper workflow live in [EagleFox31/agentshield-ai PR #6](https://github.com/EagleFox31/agentshield-ai/pull/6). The first read-only audit [completed successfully](https://github.com/EagleFox31/agentshield-ai/actions/runs/40298707488) against an immutable AppFactory feature-branch commit. That pilot does not prove the upstream PR has been released or that every future consumer will pass; merge and pin the reviewed AppFactory runtime first.
 
 The module's test suite also exercises a different non-security product narrative (fulfillment operations) to verify that the renderer and auditor do not depend on AgentShield vocabulary or security-specific headings.
+
+
+## Presentation contract v2 — GitHub-native product hero
+
+The original contract checked content but did not enforce visual consistency. The resulting Aegis and VeriChain READMEs could pass without the centered headline, badges and navigation used by AgentShield.
+
+**V2 is opt-in and backwards compatible:** consumers add an optional `presentation` object to their existing schemaVersion 1 manifest. Existing v1 manifests and audits remain valid.
+
+```json
+"presentation": {
+  "variant": "centered",
+  "headline": "Evidence before conclusions. Policies before promises.",
+  "summary": "A security service grounded in explicit authorization rules, independently verifiable events, and honest engineering maturity claims.",
+  "badges": [
+    { "label": "Maturity", "value": "Design stage", "color": "orange", "href": "#the-problem" },
+    { "label": "Standards", "value": "OWASP", "color": "263238", "href": "#industry-references" },
+    { "label": "Governance", "value": "RAIDER", "color": "0969da", "href": "#delivery-roadmap" }
+  ],
+  "navigation": [
+    { "label": "Problem", "href": "#the-problem" },
+    { "label": "Architecture", "href": "#how-the-system-is-designed-to-work" },
+    { "label": "Roadmap", "href": "#delivery-roadmap" }
+  ]
+}
+```
+
+The presentation renderer generates GitHub-native centered Markdown/HTML, product-specific Shields.io badges and navigable real section links. Nothing is keyed to one organization, product, repository or stack.
+
+### Safe migration of an existing README
+
+The initial adoption of a managed hero must be reviewed as a PR. It is marked by the exact comments `<!-- appfactory:hero:start -->` and `<!-- appfactory:hero:end -->`, at the very start of the README. Existing content after that block belongs to the consumer.
+
+```bash
+node scripts/product-readme-contract.mjs --mode hero-plan --manifest .appfactory/readme-contract.json --root .
+node scripts/product-readme-contract.mjs --mode hero-sync --manifest .appfactory/readme-contract.json --root .
+node scripts/product-readme-contract.mjs --mode audit --manifest .appfactory/readme-contract.json --root .
+```
+
+- `hero-plan` is read-only and reports conflict/no-op/managed-only update.
+- `hero-sync` replaces **only** the marked block; absent or ambiguous markers fail closed.
+- `audit` validates exact hero content and local navigation anchor existence.
+- `renderProductReadme` creates the hero for new consumers; old manifests remain unchanged.
+- Standalone presentation tests run in the path-scoped, dependency-free README CI; unrelated product builds are not triggered.
+
+**RAIDER:** Reusable, Agnostic, Idempotent, Durable, Engineering-grade, Retroactive. The presentation is not proof that the product is built, audited or certified. This feature controls Markdown presentation; it does not claim pixel-level consistency across all GitHub clients.
