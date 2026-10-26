@@ -1,0 +1,62 @@
+name: Reusable Product README Quality
+
+on:
+  workflow_call:
+    inputs:
+      manifest_path:
+        description: Relative path to the consuming repository's product README contract.
+        required: true
+        type: string
+      readme_path:
+        description: Relative path to the README to audit.
+        default: README.md
+        required: false
+        type: string
+      appfactory_ref:
+        description: Immutable AppFactory commit SHA reviewed by the consumer (pin to the same commit as the workflow).
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout AppFactory quality runtime
+        uses: actions/checkout@v4
+        with:
+          repository: Trigenys/appfactory
+          ref: ${{ inputs.appfactory_ref }}
+          path: .appfactory-quality
+          persist-credentials: false
+      - name: Verify pinned runtime and audit README
+        env:
+          EXPECTED_SHA: ${{ inputs.appfactory_ref }}
+          CONTRACT_PATH: ${{ inputs.manifest_path }}
+          README_PATH: ${{ inputs.readme_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Pin appfactory_ref to an immutable 40-character commit SHA."
+            exit 1
+          fi
+          actual_sha="$(git -C .appfactory-quality rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Resolved AppFactory source does not match requested commit."
+            exit 1
+          fi
+          node .appfactory-quality/scripts/product-readme-contract.mjs \
+            --mode audit \
+            --root "$GITHUB_WORKSPACE" \
+            --manifest "$CONTRACT_PATH" \
+            --readme "$README_PATH"
