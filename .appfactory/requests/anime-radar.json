@@ -1,0 +1,10 @@
+{
+  "name": "AnimeRadar",
+  "slug": "anime-radar",
+  "projectType": "webapp",
+  "preset": "react-vite",
+  "private": false,
+  "language": "fr",
+  "description": "Open-source anime release tracker: current season, airing schedules, latest episodes and private Telegram source synchronization.",
+  "brief": "Interface responsive FR/EN pour consulter les animés de la saison, les dates de diffusion et les derniers épisodes annoncés. Source personnelle Telegram via synchronisation locale et sécurisée (chats explicitement autorisés seulement), enrichissement calendrier AniList/Jikan, favoris et fraîcheur des données. Ne publier aucun message privé, jeton, média ou lien de téléchargement; séparer la diffusion officielle de la disponibilité constatée sur Telegram."
+}
