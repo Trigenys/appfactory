@@ -143,3 +143,41 @@ test("native D1 binding serves allowed documents without any Cloudflare API toke
   assert.equal(put.changes,1);
   assert.equal(calls.some(x=>x.sql.startsWith("UPDATE")),true);
 });
+
+test("mission preflight is explicit, main-only and never a write grant",async()=>{
+  const workflow="command-center-mission-preflight.yml";
+  const caller=valid(workflow,"workflow_dispatch");
+  assert.ok(authorizeD1DocumentClaims(caller,ref));
+  const sample={schemaVersion:1,revision:1,missions:[{
+    id:"approved-mission",goalId:"g1",status:"planned",checkpoints:[],
+  }],events:[]};
+  const f=mockApi(sample);
+  const read=await handleD1DocumentRequest(env,caller,ref,{
+    action:"read",document:"missions",
+  },f.fetchImpl);
+  assert.equal(read.value.missions[0].id,"approved-mission");
+  assert.equal(f.state.calls.length,1);
+  await assert.rejects(handleD1DocumentRequest(env,caller,ref,{
+    action:"put",document:"missions",expectedVersion:3,value:sample,
+  },f.fetchImpl),e=>e.code==="D1_DOCUMENT_PERMISSION_DENIED");
+  assert.equal(f.state.calls.length,1);
+
+  for(const rejected of [
+    valid("refresh.yml","push"),
+    valid("command-center-reports.yml","schedule"),
+    valid("command-center-reports.yml","workflow_dispatch"),
+  ]){
+    await assert.rejects(handleD1DocumentRequest(env,rejected,ref,{
+      action:"read",document:"missions",
+    },f.fetchImpl),e=>e.code==="D1_DOCUMENT_PERMISSION_DENIED");
+  }
+  assert.equal(f.state.calls.length,1);
+  for(const bad of [
+    valid(workflow,"push"),
+    valid(workflow,"pull_request"),
+    {...caller,ref:"refs/heads/feature"},
+    {...caller,workflow_ref:repository+"/.github/workflows/"+workflow+"@refs/heads/dev"},
+  ]){
+    assert.throws(()=>authorizeD1DocumentClaims(bad,ref),/trusted main-branch/);
+  }
+});
