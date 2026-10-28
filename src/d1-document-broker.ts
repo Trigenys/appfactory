@@ -241,9 +241,6 @@ async function handleScopedRunnerCommand(
     throw new D1BrokerError(403,"D1_MISSION_NOT_APPROVED",
       "Only the approved smoke mission can be modified.");
   }
-  if(doc.version!==body.expectedVersion || doc.value.revision!==cmd.expectedRevision) {
-    return {document:"missions",changes:0,version:doc.version};
-  }
   const at=new Date().toISOString(), actor={id:"cc-smoke-gha-runner",role:"agent"};
   const prior=doc.value.events.find((e:any)=>e.id===cmd.eventId);
   const eventAt=prior?.at??at;
@@ -255,6 +252,11 @@ async function handleScopedRunnerCommand(
   if(prior) {
     if(prior.fingerprint!==digest)
       throw new D1BrokerError(409,"D1_MISSION_ID_COLLISION","Event key changed payload.");
+    // A genuine same-event replay is idempotent even if the requester retained
+    // the original stale CAS revision; always validate fingerprint first.
+    return {document:"missions",changes:0,version:doc.version};
+  }
+  if(doc.version!==body.expectedVersion || doc.value.revision!==cmd.expectedRevision) {
     return {document:"missions",changes:0,version:doc.version};
   }
   const fail=(reason:string):never=>{
@@ -290,7 +292,8 @@ async function handleScopedRunnerCommand(
     if(cmd.type==="heartbeat")mission.lease.expiresAt=ttl();
     if(cmd.type==="checkpoint") {
       const step=p.step,phase=p.phase,last=mission.checkpoints.at(-1);
-      if(typeof step!=="string"||!/^[a-z][a-z0-9._-]*$/.test(step)||
+      if(typeof step!=="string" || step.length>80 ||
+        !/^[a-z][a-z0-9._-]*$/.test(step) ||
         !["before","after"].includes(String(phase)))fail("Checkpoint invalid.");
       if(phase==="before" && (last?.phase==="before" ||
         mission.checkpoints.some((cp:any)=>cp.step===step)))
@@ -306,10 +309,11 @@ async function handleScopedRunnerCommand(
         fail("Invalid pull request evidence.");
       if(phase==="after" && !commit && !pr)fail("Proof is required.");
       if(p.nextAction!=null &&
-        (typeof p.nextAction!=="string"||p.nextAction.length>250))
+        (typeof p.nextAction!=="string" || !p.nextAction.trim() ||
+          p.nextAction.length>250))
         fail("Invalid next action.");
       mission.checkpoints.push({step,phase,at,commit,pullRequest:pr,
-        nextAction:p.nextAction??null});
+        nextAction:p.nextAction==null?null:String(p.nextAction).trim()});
     }
     if(cmd.type==="complete") {
       const last=mission.checkpoints.at(-1);
@@ -320,7 +324,7 @@ async function handleScopedRunnerCommand(
     if(cmd.type==="pause") {
       if(typeof p.reason!=="string"||p.reason.trim().length===0||p.reason.length>350)
         fail("Pause reason is required.");
-      mission.status="paused";mission.blockedReason=p.reason;
+      mission.status="paused";mission.blockedReason=p.reason.trim();
       mission.lease=null;
     }
   }
