@@ -15,6 +15,8 @@ export interface GitHubOidcClaims {
   workflow_ref?: string;
   actor?: string;
   event_name?: string;
+  run_id?: string;
+  run_attempt?: string;
 }
 
 interface GitHubJwk extends JsonWebKey {
