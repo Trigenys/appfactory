@@ -175,7 +175,9 @@ async function handleScopedRunnerCommand(
       claims.iss !== "https://token.actions.githubusercontent.com" ||
       claims.repository !== identity || claims.ref !== "refs/heads/main" ||
       claims.workflow_ref !== workflow || claims.event_name !== "workflow_dispatch" ||
-      claims.actor !== "EagleFox31") {
+      claims.actor !== "EagleFox31" ||
+      typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id) ||
+      typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,4}$/.test(claims.run_attempt)) {
     throw new D1BrokerError(403,"D1_MISSION_RUNNER_FORBIDDEN",
       "An explicitly enabled, authenticated smoke runner is required.");
   }
@@ -189,6 +191,7 @@ async function handleScopedRunnerCommand(
   if(Object.keys(cmd).some(k=>!["type","eventId","missionId","expectedRevision","payload"].includes(k)) ||
      !["acquire","reclaim","checkpoint","heartbeat","complete","pause"].includes(String(cmd.type)) ||
      typeof cmd.eventId!=="string" || !/^[a-zA-Z0-9._-]{8,100}$/.test(cmd.eventId) ||
+     !cmd.eventId.startsWith("ghrun-"+claims.run_id+"-"+claims.run_attempt+"-") ||
      typeof cmd.missionId!=="string" || !/^[a-z][a-z0-9._-]{1,79}$/i.test(cmd.missionId) ||
      !Number.isSafeInteger(cmd.expectedRevision) || Number(cmd.expectedRevision)<0 ||
      !cmd.payload || typeof cmd.payload!=="object" || Array.isArray(cmd.payload)) {
