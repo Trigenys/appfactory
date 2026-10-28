@@ -181,3 +181,151 @@ test("mission preflight is explicit, main-only and never a write grant",async()=
     assert.throws(()=>authorizeD1DocumentClaims(bad,ref),/trusted main-branch/);
   }
 });
+
+
+const smokeRepo="Trigenys/appfactory-smoke-test-20260914";
+const smokeClaims={
+  ...valid("command-center-runner-proof.yml","workflow_dispatch"),
+  repository:smokeRepo,ref,
+  workflow_ref:smokeRepo+"/.github/workflows/command-center-runner-proof.yml@"+ref,
+  actor:"EagleFox31",iss:"https://token.actions.githubusercontent.com",
+  run_id:"40672219255",run_attempt:"1",
+};
+const smokeGoal={
+  id:"approved-test-goal",status:"approved",approvedAt:"2026-10-28T09:00:00Z",
+  products:["smoke-test"],
+  links:["https://github.com/Trigenys/appfactory-smoke-test-20260914/issues/1"],
+};
+const smokeMission={
+  id:"mission-bot-smoke",goalId:smokeGoal.id,repository:smokeRepo,
+  kind:"github-executor",executorId:"cc-smoke-gha-runner",
+  status:"planned",createdAt:"2026-10-28T09:01:00Z",
+  updatedAt:"2026-10-28T09:01:00Z",
+  checkpoints:[],lease:null,nextEligibleAt:null,blockedReason:null,
+  completedAt:null,conversationUrl:null,remainingQuota:null,quotaRenewsAt:null,
+};
+function scopedD1(){
+  const records=new Map([
+    ["goals",{value:{schemaVersion:1,revision:1,goals:[smokeGoal],events:[]},version:2}],
+    ["missions",{value:{schemaVersion:1,revision:1,missions:[smokeMission],events:[]},version:1}],
+  ]);
+  const queries=[];
+  const e={...env,COMMAND_CENTER_RUNNER_ENABLED:"true",COMMAND_CENTER_DB:{
+    prepare(sql){return{bind(...params){return{
+      async first(){
+        queries.push({sql,params});
+        const record=records.get(params[0]);
+        return record?{value:JSON.stringify(record.value),version:record.version}:null;
+      },
+      async run(){
+        queries.push({sql,params});
+        if(!sql.startsWith("UPDATE cc_documents"))throw Error("No direct inserts");
+        const prior=records.get(params[3]);
+        if(!prior || prior.version!==Number(params[4]))
+          return {meta:{changes:0}};
+        records.set(params[3],{value:JSON.parse(params[0]),version:Number(params[1])});
+        return {meta:{changes:1}};
+      },
+    };}};}
+  }};
+  const send=(type,payload,{claims=smokeClaims,eventId="ghrun-40672219255-1-"+type,expectedVersion,expectedRevision}={})=>{
+    const doc=records.get("missions");
+    return handleD1DocumentRequest(e,claims,ref,{
+      action:"mission-command",document:"missions",
+      expectedVersion:expectedVersion??doc?.version??0,
+      command:{type,missionId:smokeMission.id,
+        eventId,expectedRevision:expectedRevision??doc?.value.revision??0,
+        payload},
+    },async()=>{throw Error("Cloudflare REST unexpectedly used");});
+  };
+  return {records,queries,e,send};
+}
+const smokeLease="lease-ccsmoke-20261028-a";
+test("smoke runner identity is exact, isolated and has no generic D1 document rights",async()=>{
+  const f=scopedD1();
+  const fields={leaseId:smokeLease,leaseSeconds:180};
+  for(const claims of [
+    {...smokeClaims,actor:"not-owner"},
+    {...smokeClaims,repository:repository},
+    {...smokeClaims,workflow_ref:smokeRepo+"/.github/workflows/untrusted.yml@"+ref},
+    {...smokeClaims,event_name:"push"},
+    {...smokeClaims,ref:"refs/heads/other"},
+    {...smokeClaims,iss:"invalid"},
+  ]) await assert.rejects(f.send("acquire",fields,{claims}),/trusted|forbidden|Forbidden|runner|main-branch|CALLER/iu);
+  assert.equal(f.queries.length,0);
+  await assert.rejects(f.send("acquire",fields,{claims:valid("refresh.yml","push")}),/forbidden|runner|trusted/iu);
+  assert.equal(f.queries.length,0);
+  for(const action of [
+    {action:"read",document:"missions"},
+    {action:"put",document:"missions",expectedVersion:1,value:f.records.get("missions").value},
+    {action:"read",document:"goals"},
+    {action:"put",document:"audit",expectedVersion:0,value:audit},
+  ]) await assert.rejects(handleD1DocumentRequest(f.e,smokeClaims,ref,action),
+    e=>e.code==="D1_DOCUMENT_PERMISSION_DENIED");
+  assert.equal(f.queries.length,0);
+});
+
+test("disabled feature flag denies runner write before any D1 access",async()=>{
+ const f=scopedD1();
+ const disabled={...f.e,COMMAND_CENTER_RUNNER_ENABLED:undefined};
+ await assert.rejects(handleD1DocumentRequest(disabled,smokeClaims,ref,{
+   action:"mission-command",document:"missions",expectedVersion:1,
+   command:{type:"acquire",eventId:"event-disabled-1",
+    missionId:smokeMission.id,expectedRevision:1,
+    payload:{leaseId:smokeLease,leaseSeconds:180}},
+ }),e=>e.code==="D1_MISSION_RUNNER_FORBIDDEN");
+ assert.equal(f.queries.length,0);
+});
+
+test("approved registered smoke mission acquires one CAS lease, checkpoints and finishes",async()=>{
+ const f=scopedD1();
+ const acquire=await f.send("acquire",{leaseId:smokeLease,leaseSeconds:180});
+ assert.equal(acquire.changes,1);
+ const lease=f.records.get("missions");
+ assert.equal(lease.value.missions[0].status,"running");
+ assert.equal(lease.value.missions[0].lease.owner,"cc-smoke-gha-runner");
+ assert.equal(lease.version,2);
+ const retry=await f.send("acquire",{leaseId:smokeLease,leaseSeconds:180},
+  {eventId:"ghrun-40672219255-1-acquire",expectedVersion:2,expectedRevision:2});
+ assert.equal(retry.changes,0);
+ assert.equal(f.records.get("missions").version,2);
+ const before=await f.send("checkpoint",{
+  leaseId:smokeLease,step:"create-branch",phase:"before"});
+ assert.equal(before.changes,1);
+ const after=await f.send("checkpoint",{
+  leaseId:smokeLease,step:"create-branch",phase:"after",
+  commit:"a".repeat(40)},{eventId:"ghrun-40672219255-1-after-branch"});
+ assert.equal(after.changes,1);
+ const complete=await f.send("complete",{leaseId:smokeLease});
+ assert.equal(complete.changes,1);
+ const finished=f.records.get("missions").value.missions[0];
+ assert.equal(finished.status,"completed");
+ assert.equal(finished.lease,null);
+ assert.equal(finished.checkpoints.length,2);
+ assert.deepEqual(f.queries.filter(x=>x.sql.startsWith("UPDATE")).map(x=>x.params[3]),
+  ["missions","missions","missions","missions"]);
+ assert.equal(f.records.get("goals").version,2);
+});
+
+test("CAS races, invalid goal, absent mission and lease forgery are rejected without modification",async()=>{
+ const f=scopedD1();
+ const stale=await f.send("acquire",{leaseId:smokeLease,leaseSeconds:180},{
+   expectedVersion:0,expectedRevision:1});
+ assert.equal(stale.changes,0);
+ assert.equal(f.records.get("missions").version,1);
+ await assert.rejects(f.send("checkpoint",{leaseId:smokeLease,step:"x",phase:"before"}),
+  e=>e.code==="D1_MISSION_STATE_CONFLICT");
+ await assert.rejects(f.send("acquire",{leaseId:smokeLease,leaseSeconds:9999}),
+  e=>e.code==="D1_MISSION_STATE_CONFLICT");
+ await assert.rejects(f.send("acquire",{leaseId:smokeLease,leaseSeconds:180},{
+   claims:{...smokeClaims,actor:"stranger"}}),e=>e.code==="D1_MISSION_RUNNER_FORBIDDEN");
+ f.records.delete("missions");
+ await assert.rejects(f.send("acquire",{leaseId:smokeLease,leaseSeconds:180}),
+  e=>e.code==="D1_MISSION_UNREGISTERED");
+ assert.equal(f.queries.some(x=>x.sql.startsWith("INSERT")),false);
+ f.records.set("missions",{value:{schemaVersion:1,revision:1,missions:[smokeMission],events:[]},version:1});
+ f.records.set("goals",{value:{schemaVersion:1,revision:2,goals:[],events:[]},version:3});
+ await assert.rejects(f.send("acquire",{leaseId:smokeLease,leaseSeconds:180}),
+   e=>e.code==="D1_MISSION_NOT_APPROVED");
+ assert.equal(f.records.get("missions").version,1);
+});

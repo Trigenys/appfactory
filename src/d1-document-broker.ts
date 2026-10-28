@@ -19,6 +19,12 @@ const CONSUMERS: Record<string, TrustedConsumer> = {
     },
     readable: ["goals", "audit", "history", "snapshot", "snapshots", "reports", "missions"],
     writable: ["audit", "history", "snapshot", "snapshots", "reports"]
+  },
+  "Trigenys/appfactory-smoke-test-20260914": {
+    databaseId: "bf1864e7-5f64-4063-8761-38bcbb6a8437",
+    workflows: {"command-center-runner-proof.yml": ["workflow_dispatch"]},
+    readable: [],
+    writable: []
   }
 };
 const MAX_DOCUMENT_BYTES = 1_800_000;
@@ -153,11 +159,196 @@ async function queryResource(env: Env, databaseId: string, sql: string, params: 
   }
   return result;
 }
+/**
+ * Runner command channel is distinct from generic document put and fails
+ * CLOSED unless a manually enabled AppFactory deployment permits it.
+ * This adapter mirrors the canonical Project Registry mission event contract;
+ * it cannot create missions or choose a repository.
+ */
+async function handleScopedRunnerCommand(
+  env: Env, claims: GitHubOidcClaims,
+  body: Record<string,unknown>, fetchImpl: typeof fetch
+): Promise<{document:DocKey;changes:number;version?:number}> {
+  const identity="Trigenys/appfactory-smoke-test-20260914";
+  const workflow=identity+"/.github/workflows/command-center-runner-proof.yml@refs/heads/main";
+  if (env.COMMAND_CENTER_RUNNER_ENABLED !== "true" ||
+      claims.iss !== "https://token.actions.githubusercontent.com" ||
+      claims.repository !== identity || claims.ref !== "refs/heads/main" ||
+      claims.workflow_ref !== workflow || claims.event_name !== "workflow_dispatch" ||
+      claims.actor !== "EagleFox31" ||
+      typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id) ||
+      typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,4}$/.test(claims.run_attempt)) {
+    throw new D1BrokerError(403,"D1_MISSION_RUNNER_FORBIDDEN",
+      "An explicitly enabled, authenticated smoke runner is required.");
+  }
+  if (Object.keys(body).some(k=>!["action","document","expectedVersion","command"].includes(k)) ||
+      body.document !== "missions" || !Number.isSafeInteger(body.expectedVersion) ||
+      Number(body.expectedVersion)<0 || !body.command ||
+      typeof body.command!=="object" || Array.isArray(body.command)) {
+    throw new D1BrokerError(400,"D1_MISSION_INVALID","Mission command envelope invalid.");
+  }
+  const cmd=body.command as Record<string,unknown>;
+  if(Object.keys(cmd).some(k=>!["type","eventId","missionId","expectedRevision","payload"].includes(k)) ||
+     !["acquire","reclaim","checkpoint","heartbeat","complete","pause"].includes(String(cmd.type)) ||
+     typeof cmd.eventId!=="string" || !/^[a-zA-Z0-9._-]{8,100}$/.test(cmd.eventId) ||
+     !cmd.eventId.startsWith("ghrun-"+claims.run_id+"-"+claims.run_attempt+"-") ||
+     typeof cmd.missionId!=="string" || !/^[a-z][a-z0-9._-]{1,79}$/i.test(cmd.missionId) ||
+     !Number.isSafeInteger(cmd.expectedRevision) || Number(cmd.expectedRevision)<0 ||
+     !cmd.payload || typeof cmd.payload!=="object" || Array.isArray(cmd.payload)) {
+    throw new D1BrokerError(400,"D1_MISSION_INVALID","Unknown mission command.");
+  }
+  const p=cmd.payload as Record<string,unknown>;
+  const permitted=cmd.type==="checkpoint" ? ["leaseId","step","phase","commit","pullRequest","nextAction"] :
+    cmd.type==="reclaim" ? ["leaseId","leaseSeconds","observedCheckpointCount"] :
+    cmd.type==="acquire" || cmd.type==="heartbeat" ? ["leaseId","leaseSeconds"] :
+    cmd.type==="pause" ? ["leaseId","reason"] : ["leaseId"];
+  if(Object.keys(p).some(k=>!permitted.includes(k))) {
+    throw new D1BrokerError(400,"D1_MISSION_INVALID","Unexpected mission payload.");
+  }
+  const database="bf1864e7-5f64-4063-8761-38bcbb6a8437";
+  const read=async(id:DocKey)=>{
+    const res=await queryResource(env,database,"SELECT value, version FROM cc_documents WHERE id = ?",[id],fetchImpl);
+    const row=res.results?.[0];
+    return row?{value:JSON.parse(String(row.value)) as Record<string,any>,version:Number(row.version)}:null;
+  };
+  const [goals,doc]=await Promise.all([read("goals"),read("missions")]);
+  if(!goals || !doc || !Number.isSafeInteger(doc.version) ||
+     doc.value.schemaVersion!==1 || !Array.isArray(doc.value.missions) ||
+     !Array.isArray(doc.value.events) || !Number.isSafeInteger(doc.value.revision)) {
+    throw new D1BrokerError(409,"D1_MISSION_UNREGISTERED","Mission must be registered by the owner first.");
+  }
+  // The browser/runner cannot register, reassign or change an approved goal.
+  const mission=doc.value.missions.find((m:any)=>m.id===cmd.missionId);
+  const goal=goals.value.goals?.find((g:any)=>g.id===mission?.goalId);
+  const expectedRepository="Trigenys/appfactory-smoke-test-20260914";
+  const allowedProof=(link:unknown)=>{
+    if(typeof link!=="string")return false;
+    try {
+      const u=new URL(link);
+      const path=u.pathname.split("/").filter(Boolean);
+      return u.protocol==="https:"&&u.hostname==="github.com" &&
+        !u.search&&!u.hash&&!u.username&&!u.password&&path.length===4 &&
+        (path[0]+"/"+path[1]).toLowerCase()===expectedRepository.toLowerCase() &&
+        ["issues","pull"].includes(path[2])&&/^[1-9][0-9]*$/.test(path[3]);
+    } catch { return false; }
+  };
+  if(!mission || mission.kind!=="github-executor" ||
+     mission.executorId!=="cc-smoke-gha-runner" ||
+     mission.repository!==expectedRepository ||
+     !goal?.approvedAt || !["approved","in-progress","blocked"].includes(goal.status) ||
+     !Array.isArray(goal.links) || !goal.links.some(allowedProof) ||
+     !Array.isArray(mission.checkpoints)) {
+    throw new D1BrokerError(403,"D1_MISSION_NOT_APPROVED",
+      "Only the approved smoke mission can be modified.");
+  }
+  if(doc.version!==body.expectedVersion || doc.value.revision!==cmd.expectedRevision) {
+    return {document:"missions",changes:0,version:doc.version};
+  }
+  const at=new Date().toISOString(), actor={id:"cc-smoke-gha-runner",role:"agent"};
+  const prior=doc.value.events.find((e:any)=>e.id===cmd.eventId);
+  const eventAt=prior?.at??at;
+  const text=new TextEncoder().encode(JSON.stringify({
+    type:cmd.type,at:eventAt,actor,missionId:cmd.missionId,payload:p,
+  }));
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",text)))
+    .map(x=>x.toString(16).padStart(2,"0")).join("");
+  if(prior) {
+    if(prior.fingerprint!==digest)
+      throw new D1BrokerError(409,"D1_MISSION_ID_COLLISION","Event key changed payload.");
+    return {document:"missions",changes:0,version:doc.version};
+  }
+  const fail=(reason:string):never=>{
+    throw new D1BrokerError(409,"D1_MISSION_STATE_CONFLICT",reason);
+  };
+  if(mission.updatedAt && Date.parse(at)<Date.parse(mission.updatedAt))fail("Out-of-order command.");
+  const lease=p.leaseId;
+  if(typeof lease!=="string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{15,79}$/.test(lease))fail("Invalid lease.");
+  const seconds=p.leaseSeconds;
+  const ttl=()=> {
+    if(!Number.isSafeInteger(seconds)||Number(seconds)<60||Number(seconds)>600)
+      fail("Bounded lease required.");
+    return new Date(Date.parse(at)+Number(seconds)*1000).toISOString();
+  };
+  const anyRunning=doc.value.missions.some((m:any)=>m!==mission&&m.status==="running");
+  if(cmd.type==="acquire"||cmd.type==="reclaim") {
+    if(anyRunning)fail("Another mission is already active.");
+    if(cmd.type==="acquire" && !["planned","paused"].includes(mission.status))
+      fail("Mission not available.");
+    if(cmd.type==="reclaim" &&
+       (mission.status!=="interrupted" ||
+        !Number.isSafeInteger(p.observedCheckpointCount) ||
+        p.observedCheckpointCount!==mission.checkpoints.length))
+      fail("Checkpoint reconciliation required.");
+    if(mission.nextEligibleAt && Date.parse(at)<Date.parse(mission.nextEligibleAt))
+      fail("Resume is not eligible.");
+    mission.lease={id:lease,owner:actor.id,acquiredAt:at,expiresAt:ttl()};
+    mission.status="running";mission.nextEligibleAt=null;
+  } else {
+    if(mission.status!=="running" || mission.lease?.owner!==actor.id ||
+       mission.lease?.id!==lease || !(Date.parse(at)<Date.parse(mission.lease.expiresAt)))
+      fail("An active owned lease is required.");
+    if(cmd.type==="heartbeat")mission.lease.expiresAt=ttl();
+    if(cmd.type==="checkpoint") {
+      const step=p.step,phase=p.phase,last=mission.checkpoints.at(-1);
+      if(typeof step!=="string"||!/^[a-z][a-z0-9._-]*$/.test(step)||
+        !["before","after"].includes(String(phase)))fail("Checkpoint invalid.");
+      if(phase==="before" && (last?.phase==="before" ||
+        mission.checkpoints.some((cp:any)=>cp.step===step)))
+        fail("Step was already started.");
+      if(phase==="after" && (!last||last.phase!=="before"||last.step!==step))
+        fail("After checkpoint requires matching before.");
+      if(mission.checkpoints.length>=200)fail("Checkpoint limit reached.");
+      const commit=p.commit==null?null:p.commit;
+      const pr=p.pullRequest==null?null:p.pullRequest;
+      if(commit!==null && (typeof commit!=="string"||!/^[a-f0-9]{40}$/i.test(commit)))
+        fail("Invalid commit evidence.");
+      if(pr!==null && (!allowedProof(pr) || !String(pr).includes("/pull/")))
+        fail("Invalid pull request evidence.");
+      if(phase==="after" && !commit && !pr)fail("Proof is required.");
+      if(p.nextAction!=null &&
+        (typeof p.nextAction!=="string"||p.nextAction.length>250))
+        fail("Invalid next action.");
+      mission.checkpoints.push({step,phase,at,commit,pullRequest:pr,
+        nextAction:p.nextAction??null});
+    }
+    if(cmd.type==="complete") {
+      const last=mission.checkpoints.at(-1);
+      if(!last||last.phase!=="after"||!(last.commit||last.pullRequest))
+        fail("Completion needs a verified checkpoint.");
+      mission.status="completed";mission.completedAt=at;mission.lease=null;
+    }
+    if(cmd.type==="pause") {
+      if(typeof p.reason!=="string"||p.reason.trim().length===0||p.reason.length>350)
+        fail("Pause reason is required.");
+      mission.status="paused";mission.blockedReason=p.reason;
+      mission.lease=null;
+    }
+  }
+  mission.updatedAt=at;
+  doc.value.events.push({
+    id:cmd.eventId,fingerprint:digest,missionId:mission.id,type:cmd.type,at,
+    actorId:actor.id,actorRole:actor.role,
+  });
+  doc.value.revision++;
+  const encoded=JSON.stringify(doc.value);
+  if(new TextEncoder().encode(encoded).byteLength>MAX_DOCUMENT_BYTES)
+    throw new D1BrokerError(413,"D1_DOCUMENT_TOO_LARGE","Mission ledger too large.");
+  const result=await queryResource(env,database,
+    "UPDATE cc_documents SET value = ?, version = ?, updated_at = ? WHERE id = ? AND version = ?",
+    [encoded,String(doc.version+1),at,"missions",String(doc.version)],fetchImpl);
+  return {document:"missions",changes:Number(result.meta?.changes??0),
+    version:result.meta?.changes===1?doc.version+1:doc.version};
+}
+
 export async function handleD1DocumentRequest(
   env: Env, claims: GitHubOidcClaims, expectedRef: string, body: unknown,
   fetchImpl: typeof fetch = fetch
 ): Promise<{document:DocKey; value?:unknown; version?:number; changes?:number; exists?:boolean}> {
   const consumer = authorizeD1DocumentClaims(claims,expectedRef);
+  if(body && typeof body==="object" && !Array.isArray(body) &&
+      (body as Record<string,unknown>).action==="mission-command") {
+    return handleScopedRunnerCommand(env,claims,body as Record<string,unknown>,fetchImpl);
+  }
   const operation = parseOperation(body);
   const document = operation.document;
   // A mission can be read only by a manually dispatched, pinned main-branch
