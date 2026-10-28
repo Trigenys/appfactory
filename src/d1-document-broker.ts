@@ -324,7 +324,7 @@ async function handleScopedRunnerCommand(
     if(cmd.type==="pause") {
       if(typeof p.reason!=="string"||p.reason.trim().length===0||p.reason.length>350)
         fail("Pause reason is required.");
-      mission.status="paused";mission.blockedReason=p.reason.trim();
+      mission.status="paused";mission.blockedReason=String(p.reason).trim();
       mission.lease=null;
     }
   }
