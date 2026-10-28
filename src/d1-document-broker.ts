@@ -16,18 +16,15 @@ const CONSUMERS: Record<string, TrustedConsumer> = {
       "refresh.yml": ["push", "schedule", "workflow_dispatch"],
       "command-center-reports.yml": ["push", "schedule", "workflow_dispatch"],
       "command-center-mission-preflight.yml": ["workflow_dispatch"]
-    }
-  },
-  "Trigenys/appfactory-smoke-test-20260914": {
-    databaseId: "bf1864e7-5f64-4063-8761-38bcbb6a8437",
-    workflows: {
-      "command-center-runner-proof.yml": ["workflow_dispatch"]
-    },
-    readable: [],
-    writable: []
     },
     readable: ["goals", "audit", "history", "snapshot", "snapshots", "reports", "missions"],
     writable: ["audit", "history", "snapshot", "snapshots", "reports"]
+  },
+  "Trigenys/appfactory-smoke-test-20260914": {
+    databaseId: "bf1864e7-5f64-4063-8761-38bcbb6a8437",
+    workflows: {"command-center-runner-proof.yml": ["workflow_dispatch"]},
+    readable: [],
+    writable: []
   }
 };
 const MAX_DOCUMENT_BYTES = 1_800_000;
