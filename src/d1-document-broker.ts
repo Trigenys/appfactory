@@ -1,7 +1,7 @@
 import type { Env } from "./types";
 import type { GitHubOidcClaims } from "./auth";
 
-type DocKey = "goals" | "audit" | "history" | "snapshot" | "snapshots" | "reports";
+type DocKey = "goals" | "audit" | "history" | "snapshot" | "snapshots" | "reports" | "missions";
 interface TrustedConsumer {
   workflows: Record<string, readonly string[]>;
   databaseId: string;
@@ -14,9 +14,10 @@ const CONSUMERS: Record<string, TrustedConsumer> = {
     databaseId: "bf1864e7-5f64-4063-8761-38bcbb6a8437",
     workflows: {
       "refresh.yml": ["push", "schedule", "workflow_dispatch"],
-      "command-center-reports.yml": ["push", "schedule", "workflow_dispatch"]
+      "command-center-reports.yml": ["push", "schedule", "workflow_dispatch"],
+      "command-center-mission-preflight.yml": ["workflow_dispatch"]
     },
-    readable: ["goals", "audit", "history", "snapshot", "snapshots", "reports"],
+    readable: ["goals", "audit", "history", "snapshot", "snapshots", "reports", "missions"],
     writable: ["audit", "history", "snapshot", "snapshots", "reports"]
   }
 };
@@ -54,7 +55,7 @@ function parseOperation(input: unknown): {
   if (Object.keys(data).some(k => !["action","document","expectedVersion","value"].includes(k)) ||
       (data.action !== "read" && data.action !== "put") ||
       typeof data.document !== "string" ||
-      !["goals","audit","history","snapshot","snapshots","reports"].includes(data.document)) {
+      !["goals","audit","history","snapshot","snapshots","reports","missions"].includes(data.document)) {
     throw new D1BrokerError(400,"D1_DOCUMENT_BAD_REQUEST","Unknown document or operation.");
   }
   if (data.action === "read" && Object.keys(data).some(k => k !== "action" && k !== "document")) {
@@ -159,6 +160,17 @@ export async function handleD1DocumentRequest(
   const consumer = authorizeD1DocumentClaims(claims,expectedRef);
   const operation = parseOperation(body);
   const document = operation.document;
+  // A mission can be read only by a manually dispatched, pinned main-branch
+  // preflight workflow. Existing schedulers/report collectors must not see
+  // mission history; this is NEVER a generic OIDC mission write permission.
+  if (document === "missions" &&
+      (operation.action !== "read" ||
+       claims.workflow_ref !==
+         "EagleFox31/project-registry/.github/workflows/command-center-mission-preflight.yml@refs/heads/main" ||
+       claims.event_name !== "workflow_dispatch")) {
+    throw new D1BrokerError(403,"D1_DOCUMENT_PERMISSION_DENIED",
+      "Mission access requires the dedicated read-only preflight identity.");
+  }
   if (!(operation.action === "read" ? consumer.readable : consumer.writable).includes(document)) {
     throw new D1BrokerError(403,"D1_DOCUMENT_PERMISSION_DENIED","Document operation is forbidden.");
   }
