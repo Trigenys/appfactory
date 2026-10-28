@@ -127,7 +127,7 @@ test("canonical rejects oversized steps, blank nextAction and invalid proof",asy
     const f=fixture();await f.apply("acquire",{leaseId:validLease,leaseSeconds:180});
     const before=f.writes;
     await assert.rejects(f.apply("checkpoint",{leaseId:validLease,...p}),
-      /D1_MISSION_STATE_CONFLICT|Checkpoint|invalid|State/);
+      e=>e.code==="D1_MISSION_STATE_CONFLICT");
     assert.equal(f.writes,before);
   }
 });
