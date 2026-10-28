@@ -189,6 +189,7 @@ const smokeClaims={
   repository:smokeRepo,ref,
   workflow_ref:smokeRepo+"/.github/workflows/command-center-runner-proof.yml@"+ref,
   actor:"EagleFox31",iss:"https://token.actions.githubusercontent.com",
+  run_id:"40672219255",run_attempt:"1",
 };
 const smokeGoal={
   id:"approved-test-goal",status:"approved",approvedAt:"2026-10-28T09:00:00Z",
@@ -227,7 +228,7 @@ function scopedD1(){
       },
     };}};}
   }};
-  const send=(type,payload,{claims=smokeClaims,eventId="event-ccsmoke-"+type,expectedVersion,expectedRevision}={})=>{
+  const send=(type,payload,{claims=smokeClaims,eventId="ghrun-40672219255-1-"+type,expectedVersion,expectedRevision}={})=>{
     const doc=records.get("missions");
     return handleD1DocumentRequest(e,claims,ref,{
       action:"mission-command",document:"missions",
@@ -285,7 +286,7 @@ test("approved registered smoke mission acquires one CAS lease, checkpoints and 
  assert.equal(lease.value.missions[0].lease.owner,"cc-smoke-gha-runner");
  assert.equal(lease.version,2);
  const retry=await f.send("acquire",{leaseId:smokeLease,leaseSeconds:180},
-  {eventId:"event-ccsmoke-acquire",expectedVersion:2,expectedRevision:2});
+  {eventId:"ghrun-40672219255-1-acquire",expectedVersion:2,expectedRevision:2});
  assert.equal(retry.changes,0);
  assert.equal(f.records.get("missions").version,2);
  const before=await f.send("checkpoint",{
@@ -293,7 +294,7 @@ test("approved registered smoke mission acquires one CAS lease, checkpoints and 
  assert.equal(before.changes,1);
  const after=await f.send("checkpoint",{
   leaseId:smokeLease,step:"create-branch",phase:"after",
-  commit:"a".repeat(40)},{eventId:"event-ccsmoke-after-branch"});
+  commit:"a".repeat(40)},{eventId:"ghrun-40672219255-1-after-branch"});
  assert.equal(after.changes,1);
  const complete=await f.send("complete",{leaseId:smokeLease});
  assert.equal(complete.changes,1);
