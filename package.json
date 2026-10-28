@@ -27,7 +27,7 @@
     "test:r2-provisioning": "node --test test/r2-provisioning.test.mjs",
     "test:r2-worker-build": "node --test test/r2-worker-build.test.mjs",
     "test:ui-registry": "node --test test/ui-registry.test.mjs",
-    "test:d1-document-broker": "node --test test/d1-document-broker.test.mjs"
+    "test:d1-document-broker": "node --test test/d1-document-broker.test.mjs test/mission-command-parity.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
