@@ -1,9 +1,10 @@
-import { AuthenticationError, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { AuthenticationError, authenticateInterserviceSecret, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
 import { authenticateD1Documents } from "./auth";
 import { handleD1DocumentRequest, D1BrokerError } from "./d1-document-broker";
 import { issueDatabaseLease, DatabaseLeaseError } from "./database-lease";
 import { provisionApprovedNeon, NeonProvisioningError } from "./neon-provisioning";
 import { listSecretNames, putSecret } from "./brownfield-worker";
+import {provisionInterserviceSecret,InterserviceSecretError} from "./interservice-secret";
 import { ensurePagesProject, pagesProjectUrl, triggerPagesDeployment } from "./cloudflare";
 import { findReusablePagesDeployment } from "./deployment-idempotency";
 import {
@@ -1234,6 +1235,41 @@ export default {
       infrastructureClaims
     ) {
       return provisionExistingWorker(request, env, infrastructureClaims);
+    }
+
+    if (request.method === "POST" &&
+        url.pathname === "/infrastructure/interservice-secret") {
+      try {
+        const claims=await authenticateInterserviceSecret(request,env);
+        if(request.headers.get("content-type")?.split(";")[0].trim()!=="application/json")
+          return json({error:"JSON_REQUIRED"},415);
+        const size=request.headers.get("content-length");
+        if(size && (!/^\\d+$/.test(size)||Number(size)>1024))
+          return json({error:"PAYLOAD_TOO_LARGE"},413);
+        const raw=await request.text();
+        if(new TextEncoder().encode(raw).byteLength>1024)
+          return json({error:"PAYLOAD_TOO_LARGE"},413);
+        let body:unknown;
+        try{body=JSON.parse(raw);}catch{return json({error:"INVALID_JSON"},400);}
+        const result=await provisionInterserviceSecret(env,claims,body,{
+          listSecretNames,putSecret,
+          fetch:(url,init)=>fetch(url,init)
+        });
+        return new Response(JSON.stringify(result),{
+          status:200,headers:{
+            "content-type":"application/json",
+            "cache-control":"no-store, private",
+            "referrer-policy":"no-referrer",
+            "x-content-type-options":"nosniff"
+          }
+        });
+      }catch(error){
+        if(error instanceof AuthenticationError ||
+           error instanceof InterserviceSecretError)
+          return json({error:error.code},error.status);
+        // Neither errors nor secrets nor provider payloads may be logged.
+        return json({error:"INTERSERVICE_PROVISIONING_FAILED"},503);
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/infrastructure/neon") {
