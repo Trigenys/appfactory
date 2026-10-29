@@ -117,6 +117,8 @@ jobs:
         run: npm run test:d1-document-broker
       - name: Validate private database lease contract
         run: npm run test:database-lease
+      - name: Verify OIDC-scoped interservice secret reconciliation
+        run: npm run test:interservice-secret
       - name: Validate Neon-to-Cloudflare secrets provisioning
         run: npm run test:neon-provisioning
       - name: Validate TypeScript/Wrangler Worker runtime
