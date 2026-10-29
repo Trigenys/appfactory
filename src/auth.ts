@@ -296,6 +296,45 @@ export async function authenticateInfrastructureMutation(
 }
 
 /**
+ * Narrow GitHub OIDC grant: the Atelier Maître AWS-owned workflow can only
+ * reconcile the single dedicated Notify ingest key. It cannot provision
+ * arbitrary Workers or call other AppFactory mutation endpoints.
+ */
+export function authorizeInterserviceSecretClaims(
+  claims: GitHubOidcClaims, expectedRef: string
+): void {
+  const expectedRepository = "EagleFox31/atelier2026";
+  const expectedWorkflow =
+    expectedRepository + "/.github/workflows/appfactory-interservice-secrets.yml@" + expectedRef;
+  if (claims.repository !== expectedRepository ||
+      claims.workflow_ref !== expectedWorkflow) {
+    throw new AuthenticationError(
+      403,"INTERSERVICE_SECRET_CALLER_FORBIDDEN",
+      "Only the approved Atelier Maître workflow may reconcile this credential."
+    );
+  }
+  if (expectedRef !== "refs/heads/main" || claims.ref !== expectedRef ||
+      claims.event_name !== "workflow_dispatch") {
+    throw new AuthenticationError(
+      403,"INTERSERVICE_SECRET_EVENT_FORBIDDEN",
+      "A protected main-branch manual invocation is required."
+    );
+  }
+}
+
+export async function authenticateInterserviceSecret(
+  request: Request, env: Env
+): Promise<GitHubOidcClaims> {
+  // No development-mode bypass: materializing production credentials always
+  // requires a signed GitHub JWT.
+  const {claims,expectedRef} = await verifyOidcToken(request,{
+    ...env, ENVIRONMENT:"production"
+  });
+  authorizeInterserviceSecretClaims(claims,expectedRef);
+  return claims;
+}
+
+/**
  * Database access is narrower than generic infrastructure provisioning:
  * only explicitly approved collector workflows on protected main may request
  * their own database lease. Cross-repository credential selection is forbidden.
