@@ -122,6 +122,19 @@ test("service binding is required for same-zone Notify credential proof",()=>{
   assert.doesNotMatch(router,/fetch:\(url,init\)=>fetch\(url,init\)/);
 });
 
+test("workerd-supported manual redirect mode never follows a 3xx with the key",async()=>{
+  assert.doesNotMatch(source,/redirect:"error"/);
+  assert.match(source,/redirect:"manual"/);
+  const d=dependencies({existing:true});
+  d.fetch=async(url,options)=>{
+    assert.equal(options.redirect,"manual");
+    return new Response(null,{status:302,headers:{location:"https://attacker.example/"}});
+  };
+  await assert.rejects(provisionInterserviceSecret(env,claims,body,d),
+    e=>e.status===503&&e.code==="SECRET_PROOF_HTTP_302");
+  assert.deepEqual(d.writes,[]);
+});
+
 test("HTTP probe errors differ from a real 401 key mismatch, no secret leaked",async()=>{
   const d=dependencies({existing:true});
   d.fetch=async()=>new Response(null,{status:404});

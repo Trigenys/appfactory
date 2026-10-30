@@ -60,7 +60,8 @@ async function checkKey(
     const response=await fetcher(CHECK_URL,{
       method:"POST",
       headers:{"x-notify-auth":key,"cache-control":"no-store"},
-      redirect:"error",
+      // workerd does not implement redirect: "error"; manual never follows a 3xx.
+      redirect:"manual",
       signal:AbortSignal.timeout(10000),
     });
     return response.status;
