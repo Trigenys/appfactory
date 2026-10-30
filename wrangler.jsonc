@@ -3,17 +3,27 @@
   "name": "appfactory-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-14",
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "global_fetch_strictly_public"
+  ],
   "keep_vars": true,
-  "d1_databases": [{
-    "binding": "COMMAND_CENTER_DB",
-    "database_name": "trigenys-command-center",
-    "database_id": "bf1864e7-5f64-4063-8761-38bcbb6a8437"
-  }],
+  "d1_databases": [
+    {
+      "binding": "COMMAND_CENTER_DB",
+      "database_name": "trigenys-command-center",
+      "database_id": "bf1864e7-5f64-4063-8761-38bcbb6a8437"
+    }
+  ],
   "secrets": {
     "required": [
       "GITHUB_PRIVATE_KEY",
       "CLOUDFLARE_API_TOKEN"
     ]
-  }
+  },
+  "services": [
+    {
+      "binding": "ATELIER_NOTIFY_PROBE",
+      "service": "trigenys-notify-staging-api"
+    }
+  ]
 }
