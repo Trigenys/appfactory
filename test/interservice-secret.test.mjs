@@ -100,6 +100,16 @@ test("post-write verification failures are safe to retry, with no secret echoed"
     e=>e.status===503&&e.code==="SECRET_WRITTEN_PROOF_PENDING"&&!e.message.includes(key));
   assert.equal(d.writes.length,1);
 });
+test("strict content-length parser accepts bounded numeric lengths and rejects invalid headers",()=>{
+  const route=router.slice(router.indexOf('url.pathname === "/infrastructure/interservice-secret"'));
+  assert.match(route,/\/\^\[0-9\]\+\$\//);
+  assert.doesNotMatch(route,/\/\^\\\\d\+\$\//);
+  const validHeader=/^[0-9]+$/;
+  for(const size of ["0","157","1024"])assert.equal(validHeader.test(size)&&Number(size)<=1024,true);
+  for(const size of ["1025","NaN","-1","1e2","\\d","", "999999"])
+    assert.equal(validHeader.test(size)&&Number(size)<=1024,false);
+});
+
 test("API never returns credentials, logs payloads, or exposes arbitrary secret destinations",()=>{
   assert.match(router,/url.pathname === "\/infrastructure\/interservice-secret"/);
   assert.match(router,/authenticateInterserviceSecret\(request,env\)/);
