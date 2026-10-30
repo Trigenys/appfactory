@@ -1244,7 +1244,7 @@ export default {
         if(request.headers.get("content-type")?.split(";")[0].trim()!=="application/json")
           return json({error:"JSON_REQUIRED"},415);
         const size=request.headers.get("content-length");
-        if(size && (!/^\\d+$/.test(size)||Number(size)>1024))
+        if(size && (!/^[0-9]+$/.test(size)||Number(size)>1024))
           return json({error:"PAYLOAD_TOO_LARGE"},413);
         const raw=await request.text();
         if(new TextEncoder().encode(raw).byteLength>1024)
