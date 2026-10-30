@@ -1251,9 +1251,14 @@ export default {
           return json({error:"PAYLOAD_TOO_LARGE"},413);
         let body:unknown;
         try{body=JSON.parse(raw);}catch{return json({error:"INVALID_JSON"},400);}
+        // Cloudflare forbids same-zone public Worker-to-Worker fetch.
+        // The internal Service Binding is mandatory (no public fallback).
+        if(!env.ATELIER_NOTIFY_PROBE)
+          return json({error:"NOTIFY_PROBE_SERVICE_BINDING_MISSING"},503);
+        const notify=env.ATELIER_NOTIFY_PROBE;
         const result=await provisionInterserviceSecret(env,claims,body,{
           listSecretNames,putSecret,
-          fetch:(url,init)=>fetch(url,init)
+          fetch:(url,init)=>notify.fetch(new Request(url,init))
         });
         return new Response(JSON.stringify(result),{
           status:200,headers:{
