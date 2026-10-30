@@ -67,6 +67,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_PAGES_D1_TOKEN?: string;
+  /** Internal, authenticated Worker-to-Worker credential proof. No Meta dispatch. */
+  ATELIER_NOTIFY_PROBE?: Fetcher;
   /** Existing private D1 database, bound to AppFactory for OIDC broker access. */
   COMMAND_CENTER_DB?: D1Database;
   /** Disabled unless an operator approves the isolated smoke runner; default false. */
