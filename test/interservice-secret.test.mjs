@@ -91,13 +91,13 @@ test("rerun does not overwrite existing secret and proves it matches AWS SSM key
 test("mismatched Worker key is never rotated or silently accepted",async()=>{
   const d=dependencies({existing:true,authenticated:false});
   await assert.rejects(provisionInterserviceSecret(env,claims,body,d),
-    e=>e.status===409&&e.code==="SECRET_MISMATCH_OR_UNVERIFIED");
+    e=>e.status===409&&e.code==="SECRET_MISMATCH");
   assert.deepEqual(d.writes,[]);
 });
 test("post-write verification failures are safe to retry, with no secret echoed",async()=>{
   const d=dependencies({authenticated:false});
   await assert.rejects(provisionInterserviceSecret(env,claims,body,d),
-    e=>e.status===503&&e.code==="SECRET_WRITTEN_PROOF_PENDING"&&!e.message.includes(key));
+    e=>e.status===503&&e.code==="SECRET_WRITTEN_PROOF_REJECTED"&&!e.message.includes(key));
   assert.equal(d.writes.length,1);
 });
 test("strict content-length parser accepts bounded numeric lengths and rejects invalid headers",()=>{
@@ -120,6 +120,18 @@ test("service binding is required for same-zone Notify credential proof",()=>{
   assert.match(router,/NOTIFY_PROBE_SERVICE_BINDING_MISSING/);
   assert.match(router,/notify\.fetch\(new Request\(url,init\)\)/);
   assert.doesNotMatch(router,/fetch:\(url,init\)=>fetch\(url,init\)/);
+});
+
+test("HTTP probe errors differ from a real 401 key mismatch, no secret leaked",async()=>{
+  const d=dependencies({existing:true});
+  d.fetch=async()=>new Response(null,{status:404});
+  await assert.rejects(provisionInterserviceSecret(env,claims,body,d),
+    e=>e.status===503&&e.code==="SECRET_PROOF_HTTP_404"&&!e.message.includes(key));
+  assert.equal(d.writes.length,0);
+  d.fetch=async()=>{throw new Error("Secret: "+key)};
+  await assert.rejects(provisionInterserviceSecret(env,claims,body,d),
+    e=>e.status===503&&e.code==="SECRET_PROOF_TRANSPORT"&&!e.message.includes(key));
+  assert.equal(d.writes.length,0);
 });
 
 test("API never returns credentials, logs payloads, or exposes arbitrary secret destinations",()=>{
