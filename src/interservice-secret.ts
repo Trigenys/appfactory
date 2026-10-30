@@ -55,7 +55,7 @@ export function validateInterserviceInput(
 /** Never send a test WhatsApp message; proof of key possession is a 204-only route. */
 async function checkKey(
   key:string,fetcher:InterserviceDependencies["fetch"]
-):Promise<boolean> {
+):Promise<number> {
   try {
     const response=await fetcher(CHECK_URL,{
       method:"POST",
@@ -63,10 +63,21 @@ async function checkKey(
       redirect:"error",
       signal:AbortSignal.timeout(10000),
     });
-    return response.status===204;
+    return response.status;
   } catch {
-    return false;
+    // 0 denotes a transport failure. Never include HTTP body, headers or key.
+    return 0;
   }
+}
+
+function proofFailure(status:number, existing:boolean):InterserviceSecretError {
+  if(status===401)
+    return new InterserviceSecretError(existing?409:503,
+      existing?"SECRET_MISMATCH":"SECRET_WRITTEN_PROOF_REJECTED");
+  if(status===0)
+    return new InterserviceSecretError(503,"SECRET_PROOF_TRANSPORT");
+  // Limited numeric code is safe to expose; never return upstream payloads.
+  return new InterserviceSecretError(503,"SECRET_PROOF_HTTP_"+String(status));
 }
 
 export async function provisionInterserviceSecret(
@@ -75,17 +86,19 @@ export async function provisionInterserviceSecret(
   const input=validateInterserviceInput(body,claims,env);
   const names=await dependencies.listSecretNames(env,WORKER);
   if(names.has(SECRET)){
-    if(!await checkKey(input.key,dependencies.fetch)) {
-      // Existing Worker key may differ from SSM. Never overwrite it or
-      // pretend the environments are synchronized. Explicit repair required.
-      throw new InterserviceSecretError(409,"SECRET_MISMATCH_OR_UNVERIFIED");
+    const proof=await checkKey(input.key,dependencies.fetch);
+    if(proof!==204){
+      // Never overwrite an existing Worker key or infer a mismatch from an
+      // upstream HTTP failure.
+      throw proofFailure(proof,true);
     }
     return {status:"ALREADY_CONFIGURED",contract:CONTRACT,worker:WORKER};
   }
   await dependencies.putSecret(env,WORKER,SECRET,input.key);
-  if(!await checkKey(input.key,dependencies.fetch)){
+  const proof=await checkKey(input.key,dependencies.fetch);
+  if(proof!==204){
     // A retry can prove the same key after Worker rollout; never rotate here.
-    throw new InterserviceSecretError(503,"SECRET_WRITTEN_PROOF_PENDING");
+    throw proofFailure(proof,false);
   }
   return {status:"PROVISIONED",contract:CONTRACT,worker:WORKER};
 }
