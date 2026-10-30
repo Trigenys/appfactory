@@ -110,6 +110,18 @@ test("strict content-length parser accepts bounded numeric lengths and rejects i
     assert.equal(validHeader.test(size)&&Number(size)<=1024,false);
 });
 
+test("service binding is required for same-zone Notify credential proof",()=>{
+  const wrangler=JSON.parse(fs.readFileSync("wrangler.jsonc","utf8"));
+  const services=wrangler.services||[];
+  assert.deepEqual(services.filter(x=>x.binding==="ATELIER_NOTIFY_PROBE"),
+    [{binding:"ATELIER_NOTIFY_PROBE",service:"trigenys-notify-staging-api"}]);
+  assert.equal(wrangler.keep_vars,true);
+  assert.match(router,/if\(!env\.ATELIER_NOTIFY_PROBE\)/);
+  assert.match(router,/NOTIFY_PROBE_SERVICE_BINDING_MISSING/);
+  assert.match(router,/notify\.fetch\(new Request\(url,init\)\)/);
+  assert.doesNotMatch(router,/fetch:\(url,init\)=>fetch\(url,init\)/);
+});
+
 test("API never returns credentials, logs payloads, or exposes arbitrary secret destinations",()=>{
   assert.match(router,/url.pathname === "\/infrastructure\/interservice-secret"/);
   assert.match(router,/authenticateInterserviceSecret\(request,env\)/);
