@@ -1,0 +1,10 @@
+{
+  "name": "Trigenys Studio",
+  "slug": "trigenys-studio",
+  "projectType": "webapp",
+  "preset": "react-vite",
+  "private": true,
+  "description": "Cockpit de production et de communication Trigenys : pilotage des contenus, validation humaine, programmation et reporting multi-produits.",
+  "brief": "Concevoir une application web interne mobile-first qui centralise le travail quotidien d'une responsable de communication pour Trigenys Insight, Précis Translator et Atelier Maître. MVP : tableau de bord de tâches et priorités, espaces par projet, calendrier éditorial, dossiers de contenu contextualisés, pipeline standard Sujet/Demande → Préparation IA → Relecture factuelle et éditoriale → Visuels multi-format → Validation humaine → Programmation/publication → Reporting ; statuts, échéances, commentaires et historique. Prévoir les rôles opératrice communication et administrateur, permissions minimales, audit, accessibilité, états d'erreur et publication uniquement après approbation explicite. Architecture modulaire et interfaces d'intégration vers le CMS Trigenys Insight, le radar Editorial OS, le pipeline visuel existant, Buffer et Trigenys SEO Monitor, sans reproduire leurs moteurs ni supposer que leurs API ou accès sont déjà branchés. L'assistant IA est contextuel à chaque tâche plutôt qu'une multiplication de fils de discussion. Générer seulement le socle web React/TypeScript, CI et AppFactory Project Automation ; auth, backend, persistance, analytics et hébergement seront spécifiés séparément. Appliquer RAIDER et des composants réutilisables.",
+  "language": "fr"
+}
