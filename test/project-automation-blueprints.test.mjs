@@ -3,15 +3,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const root = new URL('../', import.meta.url);
-const runtime = 'b1deb7b1069739879d7a4acb9cd3521bca835049';
+const runtime = '0523510a8e42290df3bae5749d034b1637569af5';
 const broker = 'https://appfactory-project-token-broker.lawrynnjennifer.workers.dev/v1/github/user-token';
-const blueprintPaths = [
-  'blueprints/android-compose/.github/workflows/project-automation.yml',
-  'blueprints/entitlements/.github/workflows/project-automation.yml',
-  'blueprints/typescript-api/.github/workflows/project-automation.yml',
-  'blueprints/tauri-react/.github/workflows/project-automation.yml',
-  'blueprints/react-vite/.github/workflows/project-automation.yml'
-];
+const blueprintPaths = fs
+  .readdirSync(new URL('blueprints/', root), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => `blueprints/${entry.name}/.github/workflows/project-automation.yml`)
+  .filter((path) => fs.existsSync(new URL(path, root)))
+  .sort();
+const platformPath = '.github/workflows/project-automation.yml';
+
+test('Project Automation contract covers every blueprint that ships the workflow', () => {
+  assert.ok(blueprintPaths.length >= 5, `expected at least 5 blueprints, found ${blueprintPaths.length}`);
+});
 
 for (const path of blueprintPaths) {
   test(`${path} uses the zero-PAT Project broker contract`, () => {
@@ -32,12 +36,12 @@ for (const path of blueprintPaths) {
   });
 }
 
-test('all generated product blueprints share one Project authentication contract', () => {
-  const workflows = blueprintPaths.map((path) =>
+test('AppFactory and all generated product blueprints share one Project automation workflow', () => {
+  const workflows = [platformPath, ...blueprintPaths].map((path) =>
     fs.readFileSync(new URL(path, root), 'utf8')
   );
   for (const workflow of workflows.slice(1)) {
-    assert.equal(workflow, workflows[0]);
+    assert.equal(workflow, workflows[0], 'Project Automation workflows drifted: align the runtime pin everywhere');
   }
 });
 
