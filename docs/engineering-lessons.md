@@ -67,3 +67,20 @@ This file is the AppFactory-level RAIDER failure-memory log. Significant failure
 **Resolution:** add an optional, declarative presentation specification owned by AppFactory; implement a single renderer, exact audit of the marked hero, anchor validation and bounded updates of marked content only. Apply to different products with different copy and badges. Retain authored body content.
 
 **RAIDER prevention rule:** declare visual documentation contracts when README consistency is a product requirement; validate the **actual output structure**, not just headings or keyword counts. Extend existing consumers through a non-destructive, explicit migration and independently tested shared module. Never equate a visually polished README with production capability or standards certification.
+
+
+## 2026-11-04 — A blueprint-only runtime pin bypassed the gate that validates it
+
+**Category:** CI · change-scoped execution · supply chain · non-regression
+
+**What happened:** PR #179 moved `blueprints/react-vite/.github/workflows/project-automation.yml` to the reviewed Project Automation runtime v1.4.0 (`0523510a8e42290df3bae5749d034b1637569af5`, serialized bootstrap). AppFactory's own workflow, the other four blueprints and `test/project-automation-blueprints.test.mjs` stayed on `b1deb7b1069739879d7a4acb9cd3521bca835049`. Main looked green, then the next core change (PR #181) failed `typecheck` on an unrelated, pre-existing divergence.
+
+**Root cause:** `.appfactory/ci-impact.json` routed `blueprints/react-vite/**` only to the `webapp` gate, while the shared pin contract runs in the `core` gate. A shared contract file was classified by its folder, not by the tests that consume it. The blueprint list in the contract test was also hard-coded and did not include AppFactory's own workflow.
+
+**Classification:** process / CI routing gap (change-scoped execution too narrow), revealed by a partial runtime upgrade.
+
+**Resolution:** the upgrade was intentional (upstream 1.4.0 adds a serialized bootstrap job with a per-repository concurrency group before item sync; the reusable workflow inputs are unchanged and the broker allows the new ref). AppFactory, all blueprints and the test constant now pin v1.4.0, and the six workflows are byte-identical.
+
+**Prevention (verifiable):** every `project-automation.yml` (root and each blueprint) is listed explicitly in the `core` gate; `test/ci-impact.test.mjs` discovers those files on disk and fails if one is not routed to `core` or only reaches it by fallback; the blueprint contract test discovers blueprints on disk and requires AppFactory's own workflow to be identical to them.
+
+**Generalized lesson:** route a file to every gate whose tests read it, not only to the gate that matches its folder. A runtime pin is a cross-cutting contract: upgrade it everywhere in one change, or not at all.

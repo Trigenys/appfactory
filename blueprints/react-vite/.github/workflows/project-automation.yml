@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: "Optional Issue to resync; leave empty to bootstrap"
+        description: "Optional Issue to resync; leave empty to bootstrap/reconcile"
         required: false
         type: string
 
