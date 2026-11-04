@@ -2,6 +2,16 @@
 
 This file is the AppFactory-level RAIDER failure-memory log. Significant failures and near misses must produce a reusable prevention rule.
 
+## 2026-11-04 — Desktop blueprint provisioning exceeded Worker subrequests (repeat)
+
+**What happened:** provisioning `Trigenys/claude-accounts-manager` (desktop `tauri-react`) created the repository and its recovery marker, then failed twice with "Too many subrequests by single Worker invocation".
+
+**Root cause:** the 2026-09-24 Android fix (inline tree `content`) was applied to the mobile materializer only. `src/desktop-provisioning.ts` still posted one blob per file. A latent bug also stripped the letter `s` instead of whitespace from binary base64 (the regex literal was `/\\s+/g`).
+
+**Fix:** text files are sent inline in the single tree request; only binary assets (icons) get their own blob, with whitespace correctly stripped.
+
+**Prevention rule:** a fix for one materializer must be checked against every sibling materializer (desktop, mobile, service, webapp). Guard: `test/desktop-blueprint-batching.test.mjs` in CI. A repeated failure requires a stronger control: extract a shared materializer in a follow-up.
+
 ## 2026-09-24 — Android blueprint provisioning exceeded Worker subrequests
 
 **What happened:** the first OIDC-authenticated GhostCall request created the repository and recovery marker, then AppFactory failed while materializing the Android blueprint because one Worker invocation exceeded the Cloudflare subrequest limit.
