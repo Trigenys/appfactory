@@ -103,3 +103,20 @@ test("AppFactory self-readme changes only trigger README quality workflow", () =
   assert.equal(result.ignored.length, 2);
   assert.ok(Object.values(result.gates).every((enabled) => enabled === false));
 });
+
+test("every Project Automation workflow change runs the core contract gate", () => {
+  const workflows = [
+    ".github/workflows/project-automation.yml",
+    ...fs
+      .readdirSync("blueprints", { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => `blueprints/${entry.name}/.github/workflows/project-automation.yml`)
+      .filter((file) => fs.existsSync(file))
+  ];
+  assert.ok(workflows.length > 1);
+  for (const file of workflows) {
+    const result = classifyChanges([file], config);
+    assert.equal(result.gates.core, true, `${file} must trigger the core gate that validates the pinned runtime`);
+    assert.deepEqual(result.fallback, [], `${file} must be routed explicitly, not by fallback`);
+  }
+});

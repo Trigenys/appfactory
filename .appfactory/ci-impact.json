@@ -33,7 +33,13 @@
     "core": {
       "files": [
         "wrangler.jsonc",
-        ".github/workflows/provision-project.yml"
+        ".github/workflows/provision-project.yml",
+        ".github/workflows/project-automation.yml",
+        "blueprints/android-compose/.github/workflows/project-automation.yml",
+        "blueprints/entitlements/.github/workflows/project-automation.yml",
+        "blueprints/react-vite/.github/workflows/project-automation.yml",
+        "blueprints/tauri-react/.github/workflows/project-automation.yml",
+        "blueprints/typescript-api/.github/workflows/project-automation.yml"
       ],
       "prefixes": [
         "src/",
