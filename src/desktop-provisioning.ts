@@ -211,30 +211,33 @@ async function materializeBlueprint(
     );
     if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
 
+    const path = entry.path.slice(prefix.length);
     const isBinary = binaryExtensions.some((extension) => entry.path.toLowerCase().endsWith(extension));
-    const content = isBinary
-      ? sourceBlob.content.replace(/\\s+/g, "")
-      : encodeBase64(renderBlueprintText(decodeBase64(sourceBlob.content), {
+    if (!isBinary) {
+      // Text files travel inline in the single tree request: no per-file write (Worker subrequest limit).
+      return {
+        path,
+        mode: entry.mode,
+        type: "blob",
+        content: renderBlueprintText(decodeBase64(sourceBlob.content), {
           owner: targetOwner,
           name: appName,
           slug: repository.name
-        }));
+        })
+      };
+    }
 
+    // Tree entries only carry UTF-8 content, so binary assets still need their own blob.
     const targetBlob = await githubRequest<{ sha: string }>(
       token,
       `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
       {
         method: "POST",
-        body: JSON.stringify({ content, encoding: "base64" })
+        body: JSON.stringify({ content: sourceBlob.content.replace(/\s+/g, ""), encoding: "base64" })
       }
     );
 
-    return {
-      path: entry.path.slice(prefix.length),
-      mode: entry.mode,
-      type: "blob",
-      sha: targetBlob.sha
-    };
+    return { path, mode: entry.mode, type: "blob", sha: targetBlob.sha };
   }));
 
   const targetTree = await githubRequest<{ sha: string }>(

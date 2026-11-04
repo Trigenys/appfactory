@@ -93,6 +93,8 @@ jobs:
         run: npm run typecheck:blueprints
       - name: Validate zero-PAT Project blueprints
         run: npm run test:project-blueprints
+      - name: Validate desktop blueprint batching
+        run: npm run test:desktop-blueprint-batching
       - name: Validate managed blueprint upgrades
         run: npm run test:blueprint-upgrades
       - name: Validate UI Registry contracts
