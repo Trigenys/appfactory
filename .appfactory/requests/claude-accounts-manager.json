@@ -1,0 +1,11 @@
+{
+  "name": "Trigenys Claude Accounts Manager",
+  "slug": "claude-accounts-manager",
+  "projectType": "desktop",
+  "platform": "windows",
+  "preset": "tauri-react",
+  "private": false,
+  "description": "Windows app to run several Claude subscriptions side by side: isolated profiles, official quota tracking, reset and usage alerts.",
+  "brief": "Manage several Claude accounts on one Windows PC: isolated Claude Code profiles (CLAUDE_CONFIG_DIR) and Desktop data dirs, private-window login, official 5-hour and 7-day quotas read through the CLI control protocol without ever reading login tokens, renewal dates, account recommendation, reset notifications, usage threshold and pace alerts, and a notification-area icon.",
+  "language": "fr"
+}
