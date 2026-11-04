@@ -29,7 +29,7 @@
     "test:ui-registry": "node --test test/ui-registry.test.mjs",
     "test:d1-document-broker": "node --test test/d1-document-broker.test.mjs test/mission-command-parity.test.mjs",
     "test:interservice-secret": "node --test test/interservice-secret.test.mjs",
-    "test:desktop-blueprint-batching": "node --test test/desktop-blueprint-batching.test.mjs"
+    "test:blueprint-batching": "node --test test/blueprint-materializer-batching.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.0",
