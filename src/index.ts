@@ -1,4 +1,4 @@
-import { AuthenticationError, authenticateInterserviceSecret, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims } from "./auth";
+import { AuthenticationError, authenticateInterserviceSecret, authenticateDatabaseLease, authenticateNeonProvisioning, authenticateInfrastructureMutation, authenticateMutation, type GitHubOidcClaims, verifySignedOidcToken } from "./auth";
 import { authenticateD1Documents } from "./auth";
 import { handleD1DocumentRequest, D1BrokerError } from "./d1-document-broker";
 import { issueDatabaseLease, DatabaseLeaseError } from "./database-lease";
@@ -12,7 +12,8 @@ import {
   generateWithOpenPage,
   openPageConfigured
 } from "./engines/openpage";
-import { createRepositoryFromTemplate, getInstallationToken, provisionOrganizationProfileRepository, replaceManifest } from "./github";
+import { createGitHubAppJwt, createRepositoryFromTemplate, getInstallationToken, provisionOrganizationProfileRepository, replaceManifest } from "./github";
+import { handleGovernanceInstallationToken } from "./governance-token-broker";
 import {
   getRepositoryHeadSha,
   projectContentHash,
@@ -1362,6 +1363,14 @@ export default {
         // Error payloads and connection URLs are never logged.
         return json({ error: "DATABASE_LEASE_FAILED", message: "Unable to issue a database lease." }, 500);
       }
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/github/installation-token") {
+      return handleGovernanceInstallationToken(request, env, {
+        verifyOidc: verifySignedOidcToken,
+        appJwt: () => createGitHubAppJwt(env),
+        fetch: (input, init) => fetch(input, init)
+      });
     }
 
     if (request.method === "POST" && url.pathname === "/projects") {
