@@ -1,3 +1,4 @@
+import { materializeBlueprint as materializeSharedBlueprint } from "./blueprint-materializer";
 import type {
   CreateProjectRequest,
   Env,
@@ -180,23 +181,6 @@ async function materializeBlueprint(
   uiProfile?: UiProfile
 ): Promise<string> {
   const targetOwner = env.GITHUB_OWNER || "Trigenys";
-  const sourceOwner = env.GITHUB_WEBAPP_BLUEPRINT_OWNER || targetOwner;
-  const sourceRepo = env.GITHUB_WEBAPP_BLUEPRINT_REPO || "appfactory";
-  const source = await githubRequest<GitHubRepository>(
-    token,
-    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}`
-  );
-  const sourceRef = env.GITHUB_WEBAPP_BLUEPRINT_REF || source.default_branch || "main";
-  const prefix = `blueprints/${preset}/`;
-  const tree = await githubRequest<{ truncated: boolean; tree: GitTreeEntry[] }>(
-    token,
-    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/trees/${encodeURIComponent(sourceRef)}?recursive=1`
-  );
-  if (tree.truncated) throw new Error("AppFactory webapp blueprint tree is too large to materialize safely.");
-
-  const sourceBlobs = tree.tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix));
-  if (sourceBlobs.length === 0) throw new Error(`No files found for webapp blueprint ${preset}.`);
-
   // The default blueprint remains unchanged; add owned UI components only when selected.
   const profileExtras: Array<{ sourcePath: string; targetPath: string }> = uiProfile ? [
     { sourcePath: "ui-registry/templates/ProfileApp.tsx", targetPath: "src/App.tsx" },
@@ -207,103 +191,55 @@ async function materializeBlueprint(
     { sourcePath: "ui-registry/components/ui.css", targetPath: "src/components/ui/ui.css" }
   ] : [];
   let tokens: Record<string, string> = {};
-  if (uiProfile) {
-    const config = tree.tree.find((entry) => entry.type === "blob" && entry.path === "ui-registry/profiles.json");
-    if (!config) throw new Error("UI profile catalog is missing from the AppFactory source.");
-    const source = await githubRequest<{ content: string; encoding: string }>(
-      token, `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${config.sha}`
-    );
-    if (source.encoding !== "base64") throw new Error("Unsupported UI profile catalog encoding.");
-    const catalog = JSON.parse(decodeBase64(source.content)) as {
-      version: number;
-      profiles: Record<string, { tokens: Record<string, string> }>;
-    };
-    if (catalog.version !== UI_REGISTRY_VERSION || !catalog.profiles[uiProfile]) {
-      throw new Error(`Unsupported UI registry version or profile: ${uiProfile}.`);
-    }
-    tokens = catalog.profiles[uiProfile].tokens;
-    if (!["bg", "surface", "text", "muted", "accent", "border", "radius"].every((key) => !!tokens[key])) {
-      throw new Error(`Incomplete tokens for UI profile ${uiProfile}.`);
-    }
-  }
-  const mappedFiles = [
-    ...sourceBlobs.map((entry) => ({ entry, targetPath: entry.path.slice(prefix.length) })),
-    ...profileExtras.map(({ sourcePath, targetPath }) => {
-      const entry = tree.tree.find((item) => item.type === "blob" && item.path === sourcePath);
-      if (!entry) throw new Error(`Required UI Registry source missing: ${sourcePath}.`);
-      return { entry, targetPath };
-    })
-  ];
 
-  const [, targetRepo] = repository.full_name.split("/");
-  const binaryExtensions = [".ico", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"];
-
-  const targetEntries = await Promise.all(mappedFiles.map(async ({ entry, targetPath }) => {
-    const sourceBlob = await githubRequest<{ content: string; encoding: string }>(
-      token,
-      `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
-    );
-    if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
-
-    const isBinary = binaryExtensions.some((extension) => entry.path.toLowerCase().endsWith(extension));
-    let rendered = isBinary ? "" : renderBlueprintText(decodeBase64(sourceBlob.content), {
-      owner: targetOwner,
-      name: appName,
-      slug: repository.name
-    });
-    if (uiProfile && targetPath === "src/styles.css") {
-      for (const [key, value] of Object.entries(tokens)) {
-        rendered = rendered.replaceAll(`__UI_${key.toUpperCase()}__`, value);
+  return materializeSharedBlueprint({
+    token,
+    kind: "webapp",
+    preset,
+    source: {
+      owner: env.GITHUB_WEBAPP_BLUEPRINT_OWNER || targetOwner,
+      repo: env.GITHUB_WEBAPP_BLUEPRINT_REPO || "appfactory",
+      ref: env.GITHUB_WEBAPP_BLUEPRINT_REF
+    },
+    targetOwner,
+    repository,
+    extraFiles: async ({ tree, readText }) => {
+      if (!uiProfile) return [];
+      const config = tree.find((entry) => entry.type === "blob" && entry.path === "ui-registry/profiles.json");
+      if (!config) throw new Error("UI profile catalog is missing from the AppFactory source.");
+      const catalog = JSON.parse(await readText(config)) as {
+        version: number;
+        profiles: Record<string, { tokens: Record<string, string> }>;
+      };
+      if (catalog.version !== UI_REGISTRY_VERSION || !catalog.profiles[uiProfile]) {
+        throw new Error(`Unsupported UI registry version or profile: ${uiProfile}.`);
       }
-      if (/__UI_[A-Z_]+__/.test(rendered)) throw new Error("Unresolved UI profile token.");
-    }
-    if (uiProfile && targetPath === ".appfactory/webapp.json") {
-      const marker = JSON.parse(rendered) as WebAppMarker;
-      rendered = `${JSON.stringify({ ...marker, uiProfile, uiRegistryVersion: UI_REGISTRY_VERSION }, null, 2)}\n`;
-    }
-    const content = isBinary ? sourceBlob.content.replace(/\s+/g, "") : encodeBase64(rendered);
-
-    const targetBlob = await githubRequest<{ sha: string }>(
-      token,
-      `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/blobs`,
-      {
-        method: "POST",
-        body: JSON.stringify({ content, encoding: "base64" })
+      tokens = catalog.profiles[uiProfile].tokens;
+      if (!["bg", "surface", "text", "muted", "accent", "border", "radius"].every((key) => !!tokens[key])) {
+        throw new Error(`Incomplete tokens for UI profile ${uiProfile}.`);
       }
-    );
-
-    return {
-      path: targetPath,
-      mode: entry.mode,
-      type: "blob",
-      sha: targetBlob.sha
-    };
-  }));
-
-  const targetTree = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/trees`,
-    { method: "POST", body: JSON.stringify({ tree: [...new Map(targetEntries.map((entry) => [entry.path, entry])).values()] }) }
-  );
-  const parentSha = await getHeadSha(token, repository);
-  const commit = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/commits`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        message: `feat(appfactory): materialize ${preset} webapp blueprint`,
-        tree: targetTree.sha,
-        parents: [parentSha]
-      })
+      return profileExtras.map(({ sourcePath, targetPath }) => {
+        const entry = tree.find((item) => item.type === "blob" && item.path === sourcePath);
+        if (!entry) throw new Error(`Required UI Registry source missing: ${sourcePath}.`);
+        return { entry, targetPath };
+      });
+    },
+    render: (content, { targetPath }) => {
+      let rendered = renderBlueprintText(content, { owner: targetOwner, name: appName, slug: repository.name });
+      if (uiProfile && targetPath === "src/styles.css") {
+        for (const [key, value] of Object.entries(tokens)) {
+          rendered = rendered.replaceAll(`__UI_${key.toUpperCase()}__`, value);
+        }
+        if (/__UI_[A-Z_]+__/.test(rendered)) throw new Error("Unresolved UI profile token.");
+      }
+      if (uiProfile && targetPath === ".appfactory/webapp.json") {
+        const marker = JSON.parse(rendered) as WebAppMarker;
+        rendered = `${JSON.stringify({ ...marker, uiProfile, uiRegistryVersion: UI_REGISTRY_VERSION }, null, 2)}
+`;
+      }
+      return rendered;
     }
-  );
-  await githubRequest(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/refs/heads/${encodeURIComponent(repository.default_branch || "main")}`,
-    { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) }
-  );
-  return commit.sha;
+  });
 }
 
 function markerMatches(marker: WebAppMarker | null, preset: WebAppPreset): marker is WebAppMarker {

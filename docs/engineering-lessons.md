@@ -2,6 +2,18 @@
 
 This file is the AppFactory-level RAIDER failure-memory log. Significant failures and near misses must produce a reusable prevention rule.
 
+## 2026-11-04 — Stronger control: one shared blueprint materializer
+
+**What happened:** after the desktop fix, `src/service-provisioning.ts` and `src/webapp-provisioning.ts` still posted one blob per file, the same latent Worker subrequest risk. Four copies of the materializer had drifted (inline content, binary lists, whitespace handling).
+
+**Root cause:** each provisioning path owned a copy-pasted materializer, so a fix applied to one copy never reached the others (third occurrence of the same root cause).
+
+**Fix:** `src/blueprint-materializer.ts` is the only materializer. Callers inject source, prefix, preset, path mapping, text renderer and extra files; text files travel inline in one tree request, only binary assets get a blob, base64 whitespace (not the letter `s`) is stripped.
+
+**Prevention rule:** never re-implement Git tree materialization in a provisioning module. Guard: `test/blueprint-materializer-batching.test.mjs` (`npm run test:blueprint-batching`, core CI gate) executes the module against a mocked GitHub API, counts write subrequests, and fails if any provisioning path posts `/git/blobs` or `/git/trees` itself. It supersedes `test/desktop-blueprint-batching.test.mjs`.
+
+**Generalized lesson:** when the same incident recurs across copies, extract the shared capability and guard every caller, instead of patching copies one by one.
+
 ## 2026-11-04 — Desktop blueprint provisioning exceeded Worker subrequests (repeat)
 
 **What happened:** provisioning `Trigenys/claude-accounts-manager` (desktop `tauri-react`) created the repository and its recovery marker, then failed twice with "Too many subrequests by single Worker invocation".
