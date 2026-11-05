@@ -1,0 +1,10 @@
+{
+  "name": "Trigenys Local Shopping Search",
+  "slug": "trigenys-local-shopping-search",
+  "projectType": "service",
+  "preset": "typescript-api",
+  "private": true,
+  "description": "Independent local product discovery and comparison engine for Cameroon, reusable via APIs across Telegram, WhatsApp and Commerce Factory.",
+  "brief": "IDEA/DISCOVERY ONLY — independent reusable API capability, not an e-commerce marketplace or an operational product. Initial use case: search across consenting partner merchant catalogues, authorized ecommerce website feeds and lawful public/local business data; normalize product specifications and compare grounded offers by price, distance, confirmed availability and evidence-based trust signals. Return source attribution and freshness. Planned Telegram bot and WhatsApp Business integration as separate clients; Commerce Factory is only an optional API consumer. Do not implement live crawlers, ingest third-party WhatsApp catalogues without authorization, automate Facebook Marketplace scraping, deploy infrastructure, create a database, turn on paid services or start production work. MVP discovery: Douala, IT/electronics, merchant interviews and user validation. Product idea: https://github.com/EagleFox31/project-registry/issues/65 .",
+  "language": "fr"
+}
