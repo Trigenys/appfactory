@@ -86,3 +86,4 @@ Decommission (`remove`) needs a removal token:
   `KillMode=mixed` so that stopping the unit stops the listener.
 - `Runner.Listener --version` writes a `_diag` log, so probing the installed version must run as the
   runner account; running it as another user aborts with an access error.
+- `config.sh remove` refuses with "Uninstall service first" while the `.service` marker written by `svc.sh install` exists: `remove` deletes that marker after disabling the unit itself. Found while decommissioning `vps-seo`.

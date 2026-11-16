@@ -193,6 +193,8 @@ if [ "$ACTION" = remove ]; then
   fi
   sudo systemctl disable --now "$SERVICE" 2>/dev/null || true
   sudo pkill -u "$RUNNER_USER" -f "${RUNNER_DIR}/bin/Runner.Listener" 2>/dev/null || true
+  # svc.sh leaves a .service marker that makes config.sh remove refuse; the unit is handled here.
+  sudo rm -f "${RUNNER_DIR}/.service"
   if [ -f "${RUNNER_DIR}/.runner" ]; then
     : "${RUNNER_TOKEN:?RUNNER_TOKEN (removal token) is required to unregister}"
     (cd "$RUNNER_DIR" && sudo -u "$RUNNER_USER" ./config.sh remove --token "$RUNNER_TOKEN")
