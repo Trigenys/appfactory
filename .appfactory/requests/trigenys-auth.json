@@ -3,7 +3,7 @@
   "slug": "trigenys-auth",
   "projectType": "service",
   "preset": "typescript-api",
-  "private": true,
+  "private": false,
   "description": "Central identity and single sign-on service for Trigenys products. Standards-based OAuth 2.1/OIDC, reusable authentication, application clients and secure session lifecycle; product authorization and billing entitlements remain domain-owned.",
   "language": "fr"
 }
