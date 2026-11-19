@@ -4,6 +4,7 @@ import type { GitHubOidcClaims } from "./auth";
 const NEON_BASE = "https://console.neon.tech/api/v2";
 const SEO_REPOSITORY = "Trigenys/trigenys-seo-monitor";
 const EDITORIAL_OS_REPOSITORY = "Trigenys/trigenys-editorial-os";
+const STUDIO_REPOSITORY = "Trigenys/trigenys-studio";
 
 export interface NeonAuthTarget {
   provider: "better_auth";
@@ -40,6 +41,18 @@ const EDITORIAL_OS_STAGING_TARGET: NeonTarget = {
   workerName: "appfactory-api",
   secretName: "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING",
   createMissing: false
+};
+
+// Trigenys Studio production database: created on first reconciliation, then
+// leased to its migration workflow and exposed through a Hyperdrive profile.
+const STUDIO_PRODUCTION_TARGET: NeonTarget = {
+  projectId: "little-frog-93793324",
+  branchId: "br-twilight-star-b2orr8hw",
+  databaseName: "trigenys_studio",
+  roleName: "trigenys_studio_owner",
+  workerName: "appfactory-api",
+  secretName: "HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION",
+  createMissing: true
 };
 
 export interface NeonDependencies {
@@ -81,7 +94,8 @@ const WORKER_IDENTIFIER = /^[a-z0-9][a-z0-9-]{0,62}$/;
 function parseTargets(env: Env): Record<string, NeonTarget> {
   const targets: Record<string, NeonTarget> = {
     [SEO_REPOSITORY]: SEO_TARGET,
-    [EDITORIAL_OS_REPOSITORY]: EDITORIAL_OS_STAGING_TARGET
+    [EDITORIAL_OS_REPOSITORY]: EDITORIAL_OS_STAGING_TARGET,
+    [STUDIO_REPOSITORY]: STUDIO_PRODUCTION_TARGET
   };
   if (!env.APPFACTORY_NEON_TARGETS?.trim()) return targets;
   let parsed: unknown;
@@ -97,6 +111,7 @@ function parseTargets(env: Env): Record<string, NeonTarget> {
     if (
       repository === SEO_REPOSITORY ||
       repository === EDITORIAL_OS_REPOSITORY ||
+      repository === STUDIO_REPOSITORY ||
       !/^Trigenys\/[a-zA-Z0-9_.-]{1,90}$/.test(repository) ||
       !raw ||
       typeof raw !== "object" ||

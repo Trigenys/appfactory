@@ -369,6 +369,13 @@ export function authorizeDatabaseLeaseClaims(
         workflow: `Trigenys/trigenys-editorial-os/.github/workflows/mukuru-editorial-pilot.yml@${expectedRef}`,
         events: ["push", "workflow_dispatch"]
       }
+    ],
+    // Studio schema migrations run from its canonical infrastructure workflow.
+    "Trigenys/trigenys-studio": [
+      {
+        workflow: `Trigenys/trigenys-studio/.github/workflows/appfactory-infrastructure.yml@${expectedRef}`,
+        events: ["push", "workflow_dispatch"]
+      }
     ]
   };
   const repository = claims.repository || "";

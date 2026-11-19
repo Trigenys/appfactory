@@ -162,3 +162,33 @@ test("SEO repository dispatch lease is pinned to its original collector workflow
   assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims(claims,ref));
   assert.throws(()=>authorizeDatabaseLeaseClaims({...claims,workflow_ref:"Trigenys/trigenys-seo-monitor/.github/workflows/other.yml@"+ref},ref));
 });
+
+test("Trigenys Studio leases only its own database to its canonical infrastructure workflow",()=>{
+  const ref="refs/heads/main";
+  const infra="Trigenys/trigenys-studio/.github/workflows/appfactory-infrastructure.yml@"+ref;
+  const base={iss:"fixture",aud:"appfactory-api",exp:9999999999,repository:"Trigenys/trigenys-studio",ref};
+  for(const event_name of ["push","workflow_dispatch"]){
+    assert.doesNotThrow(()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:infra,event_name},ref));
+  }
+  assert.throws(()=>authorizeDatabaseLeaseClaims({...base,workflow_ref:infra,event_name:"schedule"},ref),e=>e.code==="DATABASE_LEASE_EVENT_FORBIDDEN");
+  for(const workflow_ref of [
+    "Trigenys/trigenys-studio/.github/workflows/ci.yml@"+ref,
+    infra.replace("@refs/heads/main","@refs/heads/dev"),
+    "Trigenys/trigenys-editorial-os/.github/workflows/appfactory-infrastructure.yml@"+ref
+  ]){
+    assert.throws(()=>authorizeDatabaseLeaseClaims({...base,workflow_ref,event_name:"push"},ref),e=>e.code==="DATABASE_LEASE_CALLER_FORBIDDEN");
+  }
+
+  const studioClaims={repository:"Trigenys/trigenys-studio"};
+  const studioRequest={repository:studioClaims.repository};
+  const studioEnv={HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION:"postgresql://trigenys_studio_owner:test-not-a-real-password@ep-demo.c-6.eu-central-1.aws.neon.tech:5432/trigenys_studio?sslmode=require"};
+  const lease=issueDatabaseLease(studioEnv,studioClaims,studioRequest);
+  assert.equal(lease.status,"READY");
+  assert.equal(lease.database,"trigenys_studio");
+  assert.equal(lease.databaseUrl.includes("sslmode="),false);
+  assert.equal(lease.databaseUrl.startsWith("postgresql://trigenys_studio_owner:"),true);
+  assert.throws(()=>issueDatabaseLease(studioEnv,studioClaims,{...studioRequest,database:"seo_monitor"}),e=>e.code==="DATABASE_LEASE_FIELDS_FORBIDDEN");
+  assert.throws(()=>issueDatabaseLease(studioEnv,editorialClaims,studioRequest),e=>e.code==="DATABASE_LEASE_REPOSITORY_MISMATCH");
+  assert.throws(()=>issueDatabaseLease({},studioClaims,studioRequest),e=>e.code==="DATABASE_LEASE_NOT_CONFIGURED");
+  assert.match(types,/HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION\?: string/);
+});
