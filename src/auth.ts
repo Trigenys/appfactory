@@ -17,6 +17,8 @@ export interface GitHubOidcClaims {
   event_name?: string;
   run_id?: string;
   run_attempt?: string;
+  repository_owner?: string;
+  job_workflow_ref?: string;
 }
 
 interface GitHubJwk extends JsonWebKey {
@@ -162,6 +164,48 @@ async function verifyWithKey(
   }
 }
 
+/**
+ * Verifies a GitHub Actions OIDC bearer token: structure, RS256 signature
+ * against GitHub's JWKS, issuer, audience and validity window. Callers add
+ * their own identity policy (repository, ref, workflow) on top of the claims.
+ */
+export async function verifySignedOidcToken(
+  request: Request,
+  expectedAudience: string
+): Promise<GitHubOidcClaims> {
+  const token = bearerToken(request);
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new AuthenticationError(401, "OIDC_TOKEN_INVALID", "GitHub OIDC token is malformed.");
+  }
+
+  const [headerSegment, claimsSegment, signatureSegment] = parts;
+  const header = decodeJson<{ alg?: string; kid?: string }>(headerSegment);
+  if (header.alg !== "RS256" || !header.kid) {
+    throw new AuthenticationError(401, "OIDC_HEADER_INVALID", "GitHub OIDC token header is invalid.");
+  }
+
+  await verifySignature(`${headerSegment}.${claimsSegment}`, signatureSegment, header.kid);
+
+  const claims = decodeJson<GitHubOidcClaims>(claimsSegment);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (claims.iss !== GITHUB_OIDC_ISSUER) {
+    throw new AuthenticationError(401, "OIDC_ISSUER_INVALID", "GitHub OIDC issuer is invalid.");
+  }
+  if (!audienceMatches(claims.aud, expectedAudience)) {
+    throw new AuthenticationError(403, "OIDC_AUDIENCE_FORBIDDEN", "GitHub OIDC audience is not allowed.");
+  }
+  if (!Number.isFinite(claims.exp) || claims.exp <= now - 30) {
+    throw new AuthenticationError(401, "OIDC_TOKEN_EXPIRED", "GitHub OIDC token has expired.");
+  }
+  if (claims.nbf !== undefined && claims.nbf > now + 30) {
+    throw new AuthenticationError(401, "OIDC_TOKEN_NOT_ACTIVE", "GitHub OIDC token is not active yet.");
+  }
+
+  return claims;
+}
+
 async function verifyOidcToken(
   request: Request,
   env: Env
@@ -182,37 +226,10 @@ async function verifyOidcToken(
     };
   }
 
-  const token = bearerToken(request);
-  const parts = token.split(".");
-  if (parts.length !== 3) {
-    throw new AuthenticationError(401, "OIDC_TOKEN_INVALID", "GitHub OIDC token is malformed.");
-  }
-
-  const [headerSegment, claimsSegment, signatureSegment] = parts;
-  const header = decodeJson<{ alg?: string; kid?: string }>(headerSegment);
-  if (header.alg !== "RS256" || !header.kid) {
-    throw new AuthenticationError(401, "OIDC_HEADER_INVALID", "GitHub OIDC token header is invalid.");
-  }
-
-  await verifySignature(`${headerSegment}.${claimsSegment}`, signatureSegment, header.kid);
-
-  const claims = decodeJson<GitHubOidcClaims>(claimsSegment);
-  const now = Math.floor(Date.now() / 1000);
   const expectedRef = env.GITHUB_OIDC_REF || "refs/heads/main";
   const expectedAudience = env.GITHUB_OIDC_AUDIENCE || "appfactory-api";
+  const claims = await verifySignedOidcToken(request, expectedAudience);
 
-  if (claims.iss !== GITHUB_OIDC_ISSUER) {
-    throw new AuthenticationError(401, "OIDC_ISSUER_INVALID", "GitHub OIDC issuer is invalid.");
-  }
-  if (!audienceMatches(claims.aud, expectedAudience)) {
-    throw new AuthenticationError(403, "OIDC_AUDIENCE_FORBIDDEN", "GitHub OIDC audience is not allowed.");
-  }
-  if (!Number.isFinite(claims.exp) || claims.exp <= now - 30) {
-    throw new AuthenticationError(401, "OIDC_TOKEN_EXPIRED", "GitHub OIDC token has expired.");
-  }
-  if (claims.nbf !== undefined && claims.nbf > now + 30) {
-    throw new AuthenticationError(401, "OIDC_TOKEN_NOT_ACTIVE", "GitHub OIDC token is not active yet.");
-  }
   if (claims.ref !== expectedRef) {
     throw new AuthenticationError(403, "OIDC_REF_FORBIDDEN", "GitHub ref is not allowed.");
   }

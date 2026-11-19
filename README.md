@@ -182,6 +182,10 @@ Successful response includes the repository, Manifest v2 commit and Cloudflare P
 
 The optional request field `engine` accepts `native` or `openpage`. `native` is the default. `engine: "openpage"` is deliberately blocked on `/projects` until OpenPage rendering/export is wired end-to-end, so AppFactory never silently deploys the native template while claiming an external engine was used.
 
+### `POST /v1/github/installation-token`
+
+Exchanges a GitHub Actions OIDC token (audience `appfactory-governance`) from a pinned AppFactory reusable governance workflow for a one-hour GitHub App installation token restricted to the calling repository and `administration: write`. Consumer repositories store no App private key. See [governance token broker](docs/governance-token-broker.md).
+
 ### `POST /engines/openpage/generate`
 
 POC endpoint for validating OpenPage generation independently from repository provisioning.
