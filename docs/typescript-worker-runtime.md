@@ -51,6 +51,19 @@ The backend therefore owns:
 - `backend/wrangler.production.jsonc`;
 - the Worker source and product tests.
 
+### npm-workspace variant
+
+For a monorepo whose Worker package lives in an npm workspace, AppFactory owns a second recipe, selected only by its root directory:
+
+```text
+root:   /services/api
+build:  npm install --ignore-scripts --no-audit --no-fund && npm run check
+deploy: npm exec --no -- wrangler deploy --config wrangler.production.jsonc --keep-vars
+build environment: NODE_VERSION=24
+```
+
+`npm install` run from a workspace member installs the whole workspace at the repository root, so Wrangler is hoisted there; `npm exec --no` resolves that local binary and never downloads one. The R2 bootstrap uses the same invocation. Any other root directory stays forbidden, and `/services/api` is not accepted for the Python runtime.
+
 AppFactory does not execute an arbitrary build or deploy command supplied by a repository. A request that mixes the TypeScript runtime with another command is rejected.
 
 ## What is reused
@@ -90,4 +103,17 @@ The existing `python-alembic` migration gate is intentionally rejected for `type
 
 A TypeScript product may still use AppFactory-managed database provisioning or runtime secrets, but a reusable Node/Postgres migration gate must be introduced as a separate reviewed capability rather than pretending the Python Alembic recipe applies.
 
-Commerce Factory is the first planned consumer of this runtime.
+## Managed Hyperdrive binding
+
+When the repository carries an AppFactory Hyperdrive marker, the release deploys from a temporary copy of the production config holding the managed Hyperdrive id. The committed config is never rewritten and holds no account-specific id.
+
+- `wrangler.production.toml` (Python recipes): the `[[hyperdrive]]` block is appended to the copy.
+- `wrangler.production.jsonc` (TypeScript recipes): the committed config declares the binding with the placeholder id:
+
+  ```jsonc
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "appfactory-managed-hyperdrive" }]
+  ```
+
+  The deploy fails before calling Wrangler unless the placeholder appears exactly once; it is then replaced in the copy by the validated id, and the copy is removed on exit. The post-deploy check still verifies that the deployed `HYPERDRIVE` binding matches the marker.
+
+Commerce Factory is the first planned consumer of this runtime. Trigenys Studio is the first consumer of the npm-workspace variant.

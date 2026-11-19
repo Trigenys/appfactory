@@ -12,6 +12,7 @@ import {
   type WorkerReadinessEvidence
 } from "./worker-readiness";
 import { r2BucketName } from "./r2-provisioning";
+import { injectHyperdriveBinding } from "./wrangler-deploy-command";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_API = "https://api.github.com";
@@ -32,6 +33,11 @@ const TYPESCRIPT_WRANGLER_BUILD_COMMAND =
   "npm install --ignore-scripts --no-audit --no-fund && npm run check";
 const TYPESCRIPT_WRANGLER_DEPLOY_COMMAND =
   "./node_modules/.bin/wrangler deploy --config wrangler.production.jsonc --keep-vars";
+// npm-workspace monorepo: the Worker package lives in /services/api and its
+// dependencies (Wrangler included) are hoisted to the workspace root.
+const TYPESCRIPT_WORKSPACE_ROOT_DIRECTORY = "/services/api";
+const TYPESCRIPT_WORKSPACE_DEPLOY_COMMAND =
+  "npm exec --no -- wrangler deploy --config wrangler.production.jsonc --keep-vars";
 const ALEMBIC_MIGRATION_COMMAND =
   'python -m pip install --user uv && export PATH="$HOME/.local/bin:$PATH" && MIGRATION_VENV="$(mktemp -d)" && trap \'rm -rf "$MIGRATION_VENV"\' EXIT && uv venv --python 3.13 "$MIGRATION_VENV" && uv pip install --python "$MIGRATION_VENV/bin/python" --no-deps . && uv pip install --python "$MIGRATION_VENV/bin/python" "psycopg[binary]>=3.2,<4" "alembic>=1.13,<2" "sqlalchemy>=2,<2.1" "pydantic-settings>=2,<3" && "$MIGRATION_VENV/bin/alembic" upgrade head';
 
@@ -466,10 +472,17 @@ function validateMigrationGate(
   return { recipe: "python-alembic", profile, databaseUrlEnv };
 }
 
+function wranglerInvocation(rootDirectory: string): string {
+  return rootDirectory === TYPESCRIPT_WORKSPACE_ROOT_DIRECTORY
+    ? "npm exec --no -- wrangler"
+    : "./node_modules/.bin/wrangler";
+}
+
 function r2DeployCommand(
   baseDeployCommand: string,
   repository: GitHubRepository,
-  gate: WorkerR2Gate | undefined
+  gate: WorkerR2Gate | undefined,
+  wrangler: string
 ): string {
   if (!gate) return baseDeployCommand;
   if (gate.recipe !== "private-media") {
@@ -480,7 +493,6 @@ function r2DeployCommand(
   }
 
   const bucketName = r2BucketName(repository.full_name);
-  const wrangler = "./node_modules/.bin/wrangler";
   const ensureBucket =
     `${wrangler} r2 bucket info ${bucketName} --json >/dev/null 2>&1 || ` +
     `${wrangler} r2 bucket create ${bucketName} --storage-class Standard`;
@@ -500,35 +512,14 @@ function hyperdriveDeployCommand(
   hyperdrive: ManagedHyperdriveEvidence
 ): string {
   if (!hyperdrive.declared) return baseDeployCommand;
-  if (
-    hyperdrive.binding !== "HYPERDRIVE" ||
-    !hyperdrive.id ||
-    !/^[A-Za-z0-9-]+$/.test(hyperdrive.id)
-  ) {
-    throw new BrownfieldWorkerProvisioningError(
-      "HYPERDRIVE_DEPLOY_BINDING_INVALID",
-      "Managed Hyperdrive marker is missing a safe HYPERDRIVE binding identity."
-    );
+  const result = injectHyperdriveBinding(baseDeployCommand, {
+    binding: hyperdrive.binding || "",
+    id: hyperdrive.id || ""
+  });
+  if (!result.ok) {
+    throw new BrownfieldWorkerProvisioningError(result.code, result.message);
   }
-
-  const rewrittenDeployCommand = baseDeployCommand.replace(
-    "wrangler.production.toml",
-    '"$APPFACTORY_WRANGLER_CONFIG"'
-  );
-  if (rewrittenDeployCommand === baseDeployCommand) {
-    throw new BrownfieldWorkerProvisioningError(
-      "HYPERDRIVE_DEPLOY_RECIPE_UNSUPPORTED",
-      "Managed Hyperdrive binding requires the reviewed Wrangler production config recipe."
-    );
-  }
-
-  const bindingToml = `\\n[[hyperdrive]]\\nbinding = "${hyperdrive.binding}"\\nid = "${hyperdrive.id}"\\n`;
-  return [
-    'APPFACTORY_WRANGLER_CONFIG="$(mktemp .appfactory-wrangler.XXXXXX.toml)"',
-    'cp wrangler.production.toml "$APPFACTORY_WRANGLER_CONFIG"',
-    `printf '%b' '${bindingToml}' >> "$APPFACTORY_WRANGLER_CONFIG"`,
-    `( trap 'rm -f "$APPFACTORY_WRANGLER_CONFIG"' EXIT; ${rewrittenDeployCommand} )`
-  ].join(" && ");
+  return result.command;
 }
 
 type ValidatedWorkerMigrationGate = {
@@ -579,20 +570,26 @@ function validateRequest(
   }
 
   const rootDirectory = input.rootDirectory || "/backend";
-  if (rootDirectory !== "/backend") {
+  const workspaceRecipe =
+    runtime === "typescript-wrangler" &&
+    rootDirectory === TYPESCRIPT_WORKSPACE_ROOT_DIRECTORY;
+  if (rootDirectory !== "/backend" && !workspaceRecipe) {
     throw new BrownfieldWorkerProvisioningError(
       "ROOT_DIRECTORY_FORBIDDEN",
-      "Brownfield Worker self-service currently allows only /backend."
+      `Brownfield Worker self-service allows /backend, or ${TYPESCRIPT_WORKSPACE_ROOT_DIRECTORY} for the typescript-wrangler workspace recipe.`
     );
   }
 
+  const typescriptDeployCommand = workspaceRecipe
+    ? TYPESCRIPT_WORKSPACE_DEPLOY_COMMAND
+    : TYPESCRIPT_WRANGLER_DEPLOY_COMMAND;
   const defaultBuildCommand =
     runtime === "typescript-wrangler"
       ? TYPESCRIPT_WRANGLER_BUILD_COMMAND
       : LEGACY_BUILD_COMMAND;
   const defaultDeployCommand =
     runtime === "typescript-wrangler"
-      ? TYPESCRIPT_WRANGLER_DEPLOY_COMMAND
+      ? typescriptDeployCommand
       : LEGACY_DEPLOY_COMMAND;
   const buildCommand = input.buildCommand || defaultBuildCommand;
   const deployCommand = input.deployCommand || defaultDeployCommand;
@@ -600,7 +597,7 @@ function validateRequest(
   const allowedRecipes =
     runtime === "typescript-wrangler"
       ? new Set([
-          `${TYPESCRIPT_WRANGLER_BUILD_COMMAND}\n${TYPESCRIPT_WRANGLER_DEPLOY_COMMAND}`
+          `${TYPESCRIPT_WRANGLER_BUILD_COMMAND}\n${typescriptDeployCommand}`
         ])
       : new Set([
           `${LEGACY_BUILD_COMMAND}\n${LEGACY_DEPLOY_COMMAND}`,
@@ -1423,7 +1420,8 @@ export async function provisionBrownfieldWorker(
     r2DeployCommand(
       hyperdriveDeployCommand(request.deployCommand, preBuildHyperdrive),
       repository,
-      request.r2
+      request.r2,
+      wranglerInvocation(request.rootDirectory)
     ),
     request.migration || null
   );
