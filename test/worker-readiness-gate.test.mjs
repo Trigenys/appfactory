@@ -6,6 +6,7 @@ const readiness = fs.readFileSync("src/worker-readiness.ts", "utf8");
 const worker = fs.readFileSync("src/brownfield-worker.ts", "utf8");
 const hyperdrive = fs.readFileSync("src/hyperdrive.ts", "utf8");
 const index = fs.readFileSync("src/index.ts", "utf8");
+const deployCommand = fs.readFileSync("src/wrangler-deploy-command.ts", "utf8");
 
 test("readiness model distinguishes deployed, degraded and ready", () => {
   assert.match(readiness, /type WorkerReleaseState = "deployed" \| "degraded" \| "ready"/);
@@ -27,8 +28,9 @@ test("managed Hyperdrive identity is injected by deploy and verified after Worke
   assert.match(hyperdrive, /actualId/);
   assert.match(hyperdrive, /binding\.id === marker\.id/);
   assert.match(worker, /hyperdriveDeployCommand/);
-  assert.match(worker, /\[\[hyperdrive\]\]/);
-  assert.match(worker, /APPFACTORY_WRANGLER_CONFIG/);
+  assert.match(worker, /injectHyperdriveBinding/);
+  assert.match(deployCommand, /\[\[hyperdrive\]\]/);
+  assert.match(deployCommand, /APPFACTORY_WRANGLER_CONFIG/);
   assert.match(worker, /verifyManagedHyperdriveBinding/);
   assert.match(worker, /HYPERDRIVE_BINDING_NOT_READY/);
   assert.doesNotMatch(worker, /reconcileManagedHyperdriveBinding/);
