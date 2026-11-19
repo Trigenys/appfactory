@@ -1,3 +1,4 @@
+import { materializeBlueprint as materializeSharedBlueprint } from "./blueprint-materializer";
 import { applyManagedBlueprintUpgrade } from "./managed-blueprint-upgrade";
 import type {
   CreateProjectRequest,
@@ -195,71 +196,20 @@ async function materializeBlueprint(
   appName: string
 ): Promise<string> {
   const targetOwner = env.GITHUB_OWNER || "Trigenys";
-  const sourceOwner = env.GITHUB_MOBILE_BLUEPRINT_OWNER || targetOwner;
-  const sourceRepo = env.GITHUB_MOBILE_BLUEPRINT_REPO || "appfactory";
-  const source = await githubRequest<GitHubRepository>(
+  return materializeSharedBlueprint({
     token,
-    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}`
-  );
-  const sourceRef = env.GITHUB_MOBILE_BLUEPRINT_REF || source.default_branch || "main";
-  const prefix = `blueprints/${preset}/`;
-  const tree = await githubRequest<{ truncated: boolean; tree: GitTreeEntry[] }>(
-    token,
-    `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/trees/${encodeURIComponent(sourceRef)}?recursive=1`
-  );
-  if (tree.truncated) throw new Error("AppFactory mobile blueprint tree is too large to materialize safely.");
-
-  const sourceBlobs = tree.tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(prefix));
-  if (sourceBlobs.length === 0) throw new Error(`No files found for mobile blueprint ${preset}.`);
-
-  const [, targetRepo] = repository.full_name.split("/");
-  const targetEntries = await Promise.all(sourceBlobs.map(async (entry) => {
-    const sourceBlob = await githubRequest<{ content: string; encoding: string }>(
-      token,
-      `/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceRepo)}/git/blobs/${entry.sha}`
-    );
-    if (sourceBlob.encoding !== "base64") throw new Error(`Unsupported blueprint encoding for ${entry.path}.`);
-
-    const rendered = renderBlueprintText(decodeBase64(sourceBlob.content), {
-      owner: targetOwner,
-      name: appName,
-      slug: repository.name
-    });
-
-    return {
-      path: entry.path
-        .slice(prefix.length)
-        .replaceAll("appfactoryplaceholder", packageSegment(repository.name)),
-      mode: entry.mode,
-      type: "blob",
-      content: rendered
-    };
-  }));
-
-  const targetTree = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/trees`,
-    { method: "POST", body: JSON.stringify({ tree: targetEntries }) }
-  );
-  const parentSha = await getHeadSha(token, repository);
-  const commit = await githubRequest<{ sha: string }>(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/commits`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        message: `feat(appfactory): materialize ${preset} mobile blueprint`,
-        tree: targetTree.sha,
-        parents: [parentSha]
-      })
-    }
-  );
-  await githubRequest(
-    token,
-    `/repos/${encodeURIComponent(targetOwner)}/${encodeURIComponent(targetRepo)}/git/refs/heads/${encodeURIComponent(repository.default_branch || "main")}`,
-    { method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }) }
-  );
-  return commit.sha;
+    kind: "mobile",
+    preset,
+    source: {
+      owner: env.GITHUB_MOBILE_BLUEPRINT_OWNER || targetOwner,
+      repo: env.GITHUB_MOBILE_BLUEPRINT_REPO || "appfactory",
+      ref: env.GITHUB_MOBILE_BLUEPRINT_REF
+    },
+    targetOwner,
+    repository,
+    mapPath: (path) => path.replaceAll("appfactoryplaceholder", packageSegment(repository.name)),
+    render: (content) => renderBlueprintText(content, { owner: targetOwner, name: appName, slug: repository.name })
+  });
 }
 
 function markerMatches(
