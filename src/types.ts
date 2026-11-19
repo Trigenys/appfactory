@@ -80,6 +80,7 @@ export interface Env {
   HYPERDRIVE_DATABASE_PROFILES?: string;
   APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL?: string;
   HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING?: string;
+  HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION?: string;
   /** One-time Neon account key, stored only as an AppFactory Cloudflare Worker secret. */
   NEON_API_KEY?: string;
   /** Optional allowlist of additional repo-scoped Neon provisioning targets. */

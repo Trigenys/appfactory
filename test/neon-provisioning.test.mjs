@@ -257,6 +257,32 @@ test("Editorial OS staging is a sealed AppFactory control-plane Neon target", ()
 });
 
 
+test("Trigenys Studio production is a sealed control-plane Neon target created on first run", () => {
+  assert.deepEqual(approvedNeonTarget({}, "Trigenys/trigenys-studio"), {
+    projectId: "little-frog-93793324",
+    branchId: "br-twilight-star-b2orr8hw",
+    databaseName: "trigenys_studio",
+    roleName: "trigenys_studio_owner",
+    workerName: "appfactory-api",
+    secretName: "HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION",
+    createMissing: true
+  });
+  assert.throws(() => approvedNeonTarget({
+    APPFACTORY_NEON_TARGETS: JSON.stringify({
+      "Trigenys/trigenys-studio": {
+        projectId: "little-frog-93793324",
+        branchId: "br-twilight-star-b2orr8hw",
+        databaseName: "evil",
+        roleName: "evil",
+        workerName: "trigenys-studio-api",
+        secretName: "TRIGENYS_STUDIO_DATABASE_URL",
+        createMissing: true
+      }
+    })
+  }, "Trigenys/trigenys-studio"));
+});
+
+
 test("approved repo can provision Managed Better Auth without exposing its base URL", async () => {
   const authRepo="Trigenys/commerce-auth-test";
   const approved={

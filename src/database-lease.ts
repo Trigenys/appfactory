@@ -7,7 +7,8 @@ interface LeaseTarget {
   roleName: string;
   envKey:
     | "APPFACTORY_DATABASE_TRIGENYS_SEO_MONITOR_URL"
-    | "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING";
+    | "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING"
+    | "HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION";
 }
 
 const LEASE_TARGETS: Record<string, LeaseTarget> = {
@@ -22,6 +23,12 @@ const LEASE_TARGETS: Record<string, LeaseTarget> = {
     database: "editorial_os_staging",
     roleName: "editorial_os_staging",
     envKey: "HYPERDRIVE_DATABASE_URL__TRIGENYS_EDITORIAL_OS_STAGING"
+  },
+  "Trigenys/trigenys-studio": {
+    repository: "Trigenys/trigenys-studio",
+    database: "trigenys_studio",
+    roleName: "trigenys_studio_owner",
+    envKey: "HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION"
   }
 };
 

@@ -82,6 +82,22 @@ Dès que `NEON_API_KEY` est configuré, exécuter SEO Monitor en mode `full`
 déclenche automatiquement ce provisionnement, puis le collecteur obtient
 sa connexion via le bail OIDC déjà implémenté.
 
+## Cible Trigenys Studio (production)
+
+`Trigenys/trigenys-studio` est une cible scellée dans le code, sur le modèle
+d'Editorial OS :
+- Neon project `little-frog-93793324`, branche `br-twilight-star-b2orr8hw` ;
+- rôle `trigenys_studio_owner` et base `trigenys_studio`, **créés au premier
+  run** (`createMissing=true`, création idempotente avec retry 409/423) ;
+- Worker Cloudflare `appfactory-api`, secret
+  `HYPERDRIVE_DATABASE_URL__TRIGENYS_STUDIO_PRODUCTION` (jamais remplacé) ;
+- bail OIDC réservé à `.github/workflows/appfactory-infrastructure.yml` sur
+  `main` (`push`, `workflow_dispatch`), pour appliquer les migrations Drizzle.
+
+Le secret vit dans `appfactory-api` (et non dans `trigenys-studio-api`) pour
+que le bail et le profil Hyperdrive le lisent : aucun déploiement du Worker
+Studio n'est nécessaire avant le provisionnement.
+
 ## Ajouter un futur projet
 
 Le Worker AppFactory peut aussi recevoir une **variable serveur**
